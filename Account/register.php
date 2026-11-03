@@ -1,89 +1,180 @@
 <?php
-session_start();
-include '../db/db.php';
+require_once '../db/db.php';
 
 $message = "";
-$message1 = "";
+$success = false;
 
-if(isset($_POST['register'])){
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $name = $_POST['name'];
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $password = $_POST['password'];
+    $name = trim($_POST['name'] ?? '');
+    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $contact = trim($_POST['contact'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-    // check username exists
-    $sql = "SELECT * FROM users WHERE username = '$username'";
-    $result = mysqli_query($conn, $sql);
+    if (
+        $name === '' ||
+        $username === '' ||
+        !filter_var($email, FILTER_VALIDATE_EMAIL) ||
+        $password === ''
+    ) {
 
-    if(mysqli_num_rows($result) > 0){
+        $message = "Please complete all required fields correctly.";
 
-        $message = "Username is taken";
+    } elseif (strlen($password) < 8) {
+
+        $message = "Password must contain at least 8 characters.";
+
+    } elseif (
+        strlen($name) > 100 ||
+        strlen($username) > 100 ||
+        strlen($email) > 100 ||
+        strlen($contact) > 30
+    ) {
+
+        $message = "One or more fields exceed the allowed length.";
 
     } else {
 
-        // hash password
-        $password_hash = password_hash($password, PASSWORD_DEFAULT);
+        $check = $conn->prepare(
+            "SELECT id
+             FROM users
+             WHERE username = ? OR email = ?
+             LIMIT 1"
+        );
 
-        // insert user
-        $sql = "INSERT INTO users (name, username, password, email, status, role)
-                VALUES ('$name', '$username', '$password_hash', '$email', 'pending', 'user')";
+        $check->bind_param("ss", $username, $email);
+        $check->execute();
 
-        if(mysqli_query($conn, $sql)){
-            $message1 = "Successfully Registered. Wait for admin approval.";
+        if ($check->get_result()->fetch_assoc()) {
+
+            $message = "Username or email is already registered.";
+
         } else {
-            $message = "Registration failed";
+
+            $password_hash = password_hash(
+                $password,
+                PASSWORD_DEFAULT
+            );
+
+            $insert = $conn->prepare(
+                "INSERT INTO users
+                (name, username, password, email, contact, status, role)
+                VALUES (?, ?, ?, ?, ?, 'pending', 'user')"
+            );
+
+            $insert->bind_param(
+                "sssss",
+                $name,
+                $username,
+                $password_hash,
+                $email,
+                $contact
+            );
+
+            $insert->execute();
+
+            $success = true;
         }
     }
 }
 ?>
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-    <title>Register</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Register | Pet-Care</title>
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <div class="container">
 
-<form method="POST">
+    <h2>🐾 Create Pet-Care Account</h2>
 
-    <h2>Register</h2>
+    <p>Register as a pet owner.</p>
 
-    <label>Name</label>
-    <input type="text" name="name" required><br><br>
+    <form method="POST">
 
-    <label>Username</label>
-    <input type="text" name="username" required><br><br>
+        <label>Full Name</label>
 
-    <label>Email</label>
-    <input type="email" name="email" required><br><br>
+        <input
+            type="text"
+            name="name"
+            maxlength="100"
+            required
+        >
 
-    <label>Password</label>
-    <input type="password" name="password" required><br><br>
+        <label>Username</label>
 
-    <!-- ERROR MESSAGE -->
-    <?php if(!empty($message)){ ?>
-        <p style="color:red; text-align:center;">
-            <?php echo $message; ?>
-        </p>
-    <?php } ?>
+        <input
+            type="text"
+            name="username"
+            maxlength="100"
+            required
+        >
 
-    <!-- SUCCESS MESSAGE -->
-    <?php if(!empty($message1)){ ?>
-        <p style="color:green; text-align:center;">
-            <?php echo $message1; ?>
-        </p>
-    <?php } ?>
+        <label>Email</label>
 
-    <button type="submit" name="register">Register</button>
+        <input
+            type="email"
+            name="email"
+            maxlength="100"
+            required
+        >
 
-    <p style="text-align:center;">
-        Already have an account? <a href="login.php">Login here</a>
+        <label>Contact Number</label>
+
+        <input
+            type="tel"
+            name="contact"
+            maxlength="30"
+            placeholder="09XXXXXXXXX"
+        >
+
+        <label>Password</label>
+
+        <input
+            type="password"
+            name="password"
+            minlength="8"
+            autocomplete="new-password"
+            required
+        >
+
+        <?php if ($message !== ''): ?>
+
+            <p style="color:red; text-align:center;">
+                <?= h($message) ?>
+            </p>
+
+        <?php endif; ?>
+
+        <?php if ($success): ?>
+
+            <p style="color:green; text-align:center;">
+                Registration successful!
+                Please wait for admin approval.
+            </p>
+
+        <?php endif; ?>
+
+        <button type="submit">
+            Register
+        </button>
+
+    </form>
+
+    <p>
+        Already have an account?
+        <a href="login.php">Login here</a>
     </p>
-
-</form>
 
 </div>
 
