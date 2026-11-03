@@ -221,3 +221,216 @@ button:hover {
         width: 100%;
     }
 }
+
+/* =========================
+   ADMIN DASHBOARD IMPROVEMENTS
+========================= */
+
+.page-title {
+    margin-bottom: 25px;
+}
+
+.page-title p {
+    color: #6b7280;
+    margin-top: 5px;
+}
+
+/* SUMMARY CARDS */
+
+.dashboard-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 18px;
+    margin-bottom: 30px;
+}
+
+.dashboard-card {
+    background: #ffffff;
+    padding: 22px;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-left: 5px solid #245c3a;
+}
+
+.card-icon {
+    font-size: 30px;
+}
+
+.dashboard-card h3 {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.dashboard-card p {
+    font-size: 28px;
+    font-weight: bold;
+    color: #26332b;
+    margin: 0;
+}
+
+.warning-card {
+    border-left-color: #e6a23c;
+}
+
+.pending-card {
+    border-left-color: #3d8b50;
+}
+
+/* OVERVIEW */
+
+.section-title {
+    margin: 25px 0 15px;
+    color: #26332b;
+}
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.overview-card {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+}
+
+.overview-card h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+}
+
+.overview-number {
+    font-size: 30px;
+    font-weight: bold;
+    color: #245c3a;
+    margin: 8px 0;
+}
+
+.overview-card span {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* QUICK ACTIONS */
+
+.quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 30px;
+}
+
+.quick-actions a {
+    display: inline-block;
+    padding: 12px 18px;
+    background: #245c3a;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+.quick-actions a:hover {
+    background: #3d8b50;
+    transform: translateY(-2px);
+}
+
+/* DASHBOARD TABLE SECTIONS */
+
+.dashboard-section {
+    background: #ffffff;
+    padding: 22px;
+    margin: 25px 0;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+}
+
+.dashboard-section h3 {
+    margin-bottom: 18px;
+}
+
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.dashboard-section table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dashboard-section th,
+.dashboard-section td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eeeeee;
+}
+
+.dashboard-section th {
+    background: #f7f9f5;
+    color: #26332b;
+}
+
+.empty-message {
+    text-align: center !important;
+    color: #6b7280;
+    padding: 20px !important;
+}
+
+/* USER STATUS */
+
+.status-active,
+.status-pending,
+.status-inactive {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-active {
+    background: #e8f5e9;
+    color: #245c3a;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-inactive {
+    background: #f8d7da;
+    color: #842029;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 768px) {
+
+    .dashboard-cards,
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-actions {
+        flex-direction: column;
+    }
+
+    .quick-actions a {
+        text-align: center;
+    }
+
+    .dashboard-section {
+        padding: 15px;
+    }
+
+}
