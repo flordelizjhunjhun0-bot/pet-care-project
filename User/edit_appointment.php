@@ -1,76 +1,174 @@
+
 <?php
-session_start();
-include '../db/db.php';
+require_once '../db/db.php';
 
+$user_id = require_user($conn);
+$appointment_id = valid_id($_GET['id'] ?? 0);
 
-$id = $_GET['id'];
+$error = '';
 
-/* GET DATA */
-$result = mysqli_query($conn, "SELECT * FROM appointments WHERE id='$id'");
-$row = mysqli_fetch_assoc($result);
+if (!$appointment_id) {
+    http_response_code(400);
+    exit('Invalid appointment ID.');
+}
 
-/* UPDATE */
-if(isset($_POST['update'])){
+// Get appointment and verify ownership through its pet.
+$stmt = $conn->prepare(
+    "SELECT appointments.*
+     FROM appointments
+     INNER JOIN pets ON pets.id = appointments.pet_id
+     WHERE appointments.id = ?
+     AND pets.user_id = ?
+     LIMIT 1"
+);
 
-    $date = $_POST['date'];
-    $time = $_POST['time'];
-    $reason = $_POST['reason'];
+$stmt->bind_param("ii", $appointment_id, $user_id);
+$stmt->execute();
 
-        mysqli_query($conn,
-            "UPDATE appointments 
-             SET date='$date',
-            time='$time',
-            reason='$reason'
-            WHERE id='$id'");
+$appointment = $stmt->get_result()->fetch_assoc();
 
-        header("Location: view.php?pet_id=" . $row['pet_id']);
-        exit();
+if (!$appointment) {
+    http_response_code(404);
+    exit('Appointment not found or access denied.');
+}
+
+$date = $appointment['date'];
+$time = $appointment['time'];
+$reason = $appointment['reason'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+
+    $date = trim($_POST['date'] ?? '');
+    $time = trim($_POST['time'] ?? '');
+    $reason = trim($_POST['reason'] ?? '');
+
+    $dateObject = DateTime::createFromFormat('!Y-m-d', $date);
+
+    $validDate = $dateObject &&
+        $dateObject->format('Y-m-d') === $date;
+
+    if (!$validDate || $date < date('Y-m-d')) {
+        $error = 'Please select a valid appointment date.';
+
+    } elseif (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time)) {
+        $error = 'Please select a valid appointment time.';
+
+    } elseif ($reason === '' || mb_strlen($reason) > 255) {
+        $error = 'Please enter a reason (maximum 255 characters).';
+
+    } else {
+        // Return the appointment to Pending for admin review.
+        $newStatus = 'Pending';
+
+        $stmt = $conn->prepare(
+            "UPDATE appointments
+             SET date = ?, time = ?, reason = ?, status = ?
+             WHERE id = ?"
+        );
+
+        $stmt->bind_param(
+            "ssssi",
+            $date,
+            $time,
+            $reason,
+            $newStatus,
+            $appointment_id
+        );
+
+        if ($stmt->execute()) {
+            header(
+                "Location: view.php?pet_id=" .
+                (int)$appointment['pet_id']
+            );
+            exit;
+        } else {
+            $error = 'Unable to update appointment. Please try again.';
+        }
     }
-
+}
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Edit Appointment</title>
-   <link rel="stylesheet" href="users.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Appointment | Pet-Care</title>
+    <link rel="stylesheet" href="users.css?v=4">
 </head>
 
 <body>
-<!-- ========================= -->
-<!-- SIDEBAR -->
-<!-- ========================= -->
+
 <div class="sidebar">
     <h1>🐾 Pet Care</h1>
 
     <a href="user_dashboard.php">Dashboard</a>
     <a href="add_pet.php">Add Pet</a>
     <a href="my_pet.php">My Pets</a>
-     <a href="../Account/logout.php">Logout</a>
+    <a href="../Account/logout.php">Logout</a>
 </div>
-
 
 <div class="main">
-<div class = "page-title">
-<h2>✏️ Edit Appointment</h2>
-</div>
 
+    <div class="page-title">
+        <h2>✏️ Edit Appointment</h2>
+        <p>Update your appointment information.</p>
+    </div>
 
-<form method="POST">
+    <?php if ($error !== ''): ?>
+        <p class="error-message"><?= h($error) ?></p>
+    <?php endif; ?>
 
-    <label>Date</label><br>
-    <input type="date" name="date" value="<?php echo $row['date']; ?>"><br><br>
+    <form method="POST">
 
-    <label>Time</label><br>
-    <input type="time" name="time" value="<?php echo $row['time']; ?>"><br><br>
+        <input
+            type="hidden"
+            name="csrf_token"
+            value="<?= h(csrf_token()) ?>"
+        >
 
-    <label>Reason</label><br>
-    <input type="text" name="reason" value="<?php echo $row['reason']; ?>"><br><br>
+        <label for="date">Appointment Date</label>
+        <input
+            type="date"
+            id="date"
+            name="date"
+            min="<?= h(date('Y-m-d')) ?>"
+            value="<?= h($date) ?>"
+            required
+        >
 
-    <button type="submit" name="update">Update Appointment</button>
+        <label for="time">Appointment Time</label>
+        <input
+            type="time"
+            id="time"
+            name="time"
+            value="<?= h($time) ?>"
+            required
+        >
 
-</form>
+        <label for="reason">Reason</label>
+        <textarea
+            id="reason"
+            name="reason"
+            maxlength="255"
+            required
+        ><?= h($reason) ?></textarea>
 
+        <div class="action-buttons">
+
+            <button type="submit">
+                Update Appointment
+            </button>
+
+            <a class="button"
+               href="view.php?pet_id=<?= (int)$appointment['pet_id'] ?>">
+                Cancel
+            </a>
+
+        </div>
+
+    </form>
 
 </div>
 

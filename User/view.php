@@ -276,14 +276,15 @@ $today = date('Y-m-d');
                     <div class="action-buttons">
                     
 
-                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
-                        Edit
-                    </a>
+                    <a class="button" href="edit_medical.php?id=<?= (int)$row['id'] ?>">
+    Edit
+</a>
 
-                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
-                       onclick="return confirm('Delete this vaccine record?')">
-                        Delete
-                    </a>
+<a class="button"
+   href="delete_medical.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+   onclick="return confirm('Delete this medical record?')">
+    Delete
+</a>
                     </div>
                 </td>
 
@@ -353,14 +354,20 @@ $today = date('Y-m-d');
                     <div class="action-buttons">
                     
 
-                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
-                        Edit
-                    </a>
+                   <div class="action-buttons">
 
-                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
-                       onclick="return confirm('Delete this vaccine record?')">
-                        Delete
-                    </a>
+    <a class="button"
+       href="edit_appointment.php?id=<?= (int)$row['id'] ?>">
+        Edit
+    </a>
+
+    <a class="button"
+       href="delete_appointment.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+       onclick="return confirm('Delete this appointment?')">
+        Delete
+    </a>
+
+</div>
                     </div>
 
                 </td>
