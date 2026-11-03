@@ -8,10 +8,16 @@ $admin_id = require_admin($conn);
 $message = '';
 $error = '';
 
-/* =========================
-   HANDLE APPOINTMENT ACTIONS
-========================= */
+/* GET ADMIN NAME */
+$stmt = $conn->prepare("SELECT name FROM users WHERE id = ? LIMIT 1");
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$admin_result = $stmt->get_result();
+$admin = $admin_result->fetch_assoc();
+$admin_name = $admin['name'] ?? 'Administrator';
+$stmt->close();
 
+/* HANDLE APPOINTMENT ACTIONS */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     verify_csrf();
@@ -23,7 +29,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Invalid appointment ID.";
     }
 
-    /* UPDATE APPOINTMENT STATUS */
     elseif ($action === 'update_status') {
 
         $new_status = $_POST['status'] ?? '';
@@ -57,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    /* DELETE APPOINTMENT */
     elseif ($action === 'delete') {
 
         $stmt = $conn->prepare(
@@ -80,10 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-/* =========================
-   SEARCH AND STATUS FILTER
-========================= */
-
+/* SEARCH AND STATUS FILTER */
 $search = trim($_GET['search'] ?? '');
 $filter_status = trim($_GET['status'] ?? '');
 
@@ -139,10 +140,7 @@ $stmt->bind_param(
 $stmt->execute();
 $result = $stmt->get_result();
 
-/* =========================
-   STATUS COUNTS
-========================= */
-
+/* STATUS COUNTS */
 function getAppointmentCount($conn, $status) {
 
     $stmt = $conn->prepare(
@@ -170,177 +168,465 @@ $totalCancelled = getAppointmentCount($conn, 'Cancelled');
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Appointment Management | Pet-Care</title>
 
-    <link rel="stylesheet" href="admin.css?v=3">
+    <link rel="stylesheet" href="admin.css?v=5">
+
+    <style>
+        /* MESSAGES */
+        .appointment-message {
+            padding: 13px 17px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .success-message {
+            background: #e4f5e9;
+            color: #24733d;
+            border: 1px solid #b9e3c5;
+        }
+
+        .error-message {
+            background: #fde8e8;
+            color: #c62828;
+            border: 1px solid #f5c2c2;
+        }
+
+        /* FILTER FORM */
+        .appointment-filter {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .appointment-filter input,
+        .appointment-filter select {
+            min-height: 42px;
+            padding: 10px 13px;
+            border: 1px solid #dce2e8;
+            border-radius: 8px;
+            outline: none;
+            font-size: 14px;
+            background: #fff;
+            color: #263445;
+        }
+
+        .appointment-filter input {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .appointment-filter select {
+            min-width: 155px;
+        }
+
+        .appointment-filter input:focus,
+        .appointment-filter select:focus {
+            border-color: #245c75;
+            box-shadow: 0 0 0 3px rgba(36, 92, 117, 0.10);
+        }
+
+        .appointment-btn {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 40px;
+            padding: 9px 15px;
+            border: none;
+            border-radius: 7px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .btn-filter {
+            background: #173b4d;
+            color: #fff;
+        }
+
+        .btn-filter:hover {
+            background: #245c75;
+        }
+
+        .btn-reset {
+            background: #e8edf1;
+            color: #34495e;
+        }
+
+        .btn-reset:hover {
+            background: #d8e0e6;
+        }
+
+        /* STATUS BADGES */
+        .appointment-status {
+            display: inline-block;
+            padding: 6px 11px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .status-pending {
+            background: #fff2d8;
+            color: #a66a00;
+        }
+
+        .status-approved {
+            background: #e4f5e9;
+            color: #24733d;
+        }
+
+        .status-completed {
+            background: #e4efff;
+            color: #245c9c;
+        }
+
+        .status-cancelled {
+            background: #fde8e8;
+            color: #c62828;
+        }
+
+        /* UPDATE STATUS FORM */
+        .status-update-form {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            min-width: 115px;
+        }
+
+        .status-update-form select {
+            width: 100%;
+            min-height: 36px;
+            padding: 7px 9px;
+            border: 1px solid #dce2e8;
+            border-radius: 6px;
+            outline: none;
+            font-size: 12px;
+            background: #fff;
+        }
+
+        /* ACTION BUTTONS */
+        .update-button,
+        .delete-button {
+            width: 100%;
+            min-height: 35px;
+            padding: 7px 11px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .update-button {
+            background: #245c75;
+            color: #fff;
+        }
+
+        .update-button:hover {
+            background: #173b4d;
+        }
+
+        .delete-button {
+            background: #dc4c4c;
+            color: #fff;
+        }
+
+        .delete-button:hover {
+            background: #bd3535;
+        }
+
+        .appointment-owner {
+            font-weight: 600;
+            color: #263445;
+        }
+
+        .appointment-pet {
+            font-weight: 600;
+            color: #173b4d;
+        }
+
+        .appointment-result-count {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .empty-message {
+            text-align: center;
+            padding: 30px 15px;
+            color: #6b7280;
+        }
+
+        @media (max-width: 700px) {
+            .appointment-filter {
+                flex-direction: column;
+            }
+
+            .appointment-filter input,
+            .appointment-filter select,
+            .appointment-filter button,
+            .appointment-filter a {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 
-<body>
+<body class="professional-dashboard">
 
 <!-- SIDEBAR -->
-<div class="sidebar">
+<aside class="sidebar">
 
-    <h2>🐾 Admin Panel</h2>
-
-    <a href="admin_dashboard.php">Dashboard</a>
-    <a href="manage_users.php">Manage Users</a>
-    <a href="manage_pets.php">Manage Pets</a>
-    <a href="admin_vaccine.php">Vaccines</a>
-    <a href="admin_medical.php">Medical</a>
-    <a href="admin_appointment.php" class="active">Appointments</a>
-    <a href="reports.php">Reports</a>
-    <a href="../Account/logout.php">Logout</a>
-
-</div>
-
-<!-- MAIN CONTENT -->
-<div class="main">
-
-    <div class="page-title">
-        <h2>📅 Appointment Management</h2>
-        <p>Manage appointment requests and booking status.</p>
+    <div class="admin-sidebar-brand">
+        <div class="admin-brand-icon">🐾</div>
+        <div>
+            <h1>Pet-Care</h1>
+            <span>Veterinary Portal</span>
+        </div>
     </div>
 
-    <!-- SUCCESS / ERROR MESSAGE -->
-    <?php if ($message !== '') { ?>
-        <div class="appointment-message success-message">
-            <?php echo h($message); ?>
-        </div>
-    <?php } ?>
+    <p class="admin-sidebar-label">MAIN MENU</p>
 
-    <?php if ($error !== '') { ?>
-        <div class="appointment-message error-message">
-            <?php echo h($error); ?>
-        </div>
-    <?php } ?>
+    <nav class="sidebar-nav">
 
-    <!-- STATUS SUMMARY -->
-    <div class="appointment-summary">
-
-        <div class="appointment-summary-card pending-summary">
-            <h3>Pending</h3>
-            <p><?php echo $totalPending; ?></p>
-        </div>
-
-        <div class="appointment-summary-card approved-summary">
-            <h3>Approved</h3>
-            <p><?php echo $totalApproved; ?></p>
-        </div>
-
-        <div class="appointment-summary-card completed-summary">
-            <h3>Completed</h3>
-            <p><?php echo $totalCompleted; ?></p>
-        </div>
-
-        <div class="appointment-summary-card cancelled-summary">
-            <h3>Cancelled</h3>
-            <p><?php echo $totalCancelled; ?></p>
-        </div>
-
-    </div>
-
-    <!-- SEARCH AND FILTER -->
-    <form method="GET" class="appointment-filter">
-
-        <input
-            type="text"
-            name="search"
-            placeholder="Search pet, owner, or reason..."
-            value="<?php echo h($search); ?>"
-        >
-
-        <select name="status">
-
-            <option value="">All Statuses</option>
-
-            <option value="Pending"
-                <?php echo $filter_status === 'Pending' ? 'selected' : ''; ?>>
-                Pending
-            </option>
-
-            <option value="Approved"
-                <?php echo $filter_status === 'Approved' ? 'selected' : ''; ?>>
-                Approved
-            </option>
-
-            <option value="Completed"
-                <?php echo $filter_status === 'Completed' ? 'selected' : ''; ?>>
-                Completed
-            </option>
-
-            <option value="Cancelled"
-                <?php echo $filter_status === 'Cancelled' ? 'selected' : ''; ?>>
-                Cancelled
-            </option>
-
-        </select>
-
-        <button type="submit">Search / Filter</button>
-
-        <a href="admin_appointment.php" class="reset-filter">
-            Reset
+        <a href="admin_dashboard.php">
+            <span class="admin-nav-icon">▦</span>
+            Dashboard
         </a>
 
-    </form>
+        <a href="manage_users.php">
+            <span class="admin-nav-icon">👥</span>
+            Manage Users
+        </a>
+
+        <a href="manage_pets.php">
+            <span class="admin-nav-icon">🐾</span>
+            Manage Pets
+        </a>
+
+        <a href="admin_vaccine.php">
+            <span class="admin-nav-icon">💉</span>
+            Vaccines
+        </a>
+
+        <a href="admin_medical.php">
+            <span class="admin-nav-icon">🩺</span>
+            Medical Records
+        </a>
+
+        <a href="admin_appointment.php" class="active">
+            <span class="admin-nav-icon">📅</span>
+            Appointments
+        </a>
+
+        <a href="reports.php">
+            <span class="admin-nav-icon">📊</span>
+            Reports
+        </a>
+
+    </nav>
+
+    <div class="admin-sidebar-bottom">
+
+        <div class="admin-sidebar-user">
+            <div class="admin-user-avatar">👤</div>
+            <div>
+                <strong><?= h($admin_name) ?></strong>
+                <span>Administrator</span>
+            </div>
+        </div>
+
+        <a href="../Account/logout.php" class="admin-logout-link">
+            <span class="admin-nav-icon">↪</span>
+            Logout
+        </a>
+
+    </div>
+
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main professional-main">
+
+    <!-- TOPBAR -->
+    <header class="admin-dashboard-topbar">
+        <div>
+            <h2>Appointment Management</h2>
+            <p>Manage appointment requests and booking status.</p>
+        </div>
+
+        <div class="date-card">
+            📅 <?= date('F d, Y') ?>
+        </div>
+    </header>
+
+    <!-- SUCCESS / ERROR MESSAGE -->
+    <?php if ($message !== ''): ?>
+        <div class="appointment-message success-message">
+            <?= h($message) ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($error !== ''): ?>
+        <div class="appointment-message error-message">
+            <?= h($error) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- STATUS SUMMARY -->
+    <section class="admin-stats-grid">
+
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon">⏳</div>
+            <div>
+                <p>Pending</p>
+                <h3><?= number_format($totalPending) ?></h3>
+            </div>
+        </div>
+
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon">✓</div>
+            <div>
+                <p>Approved</p>
+                <h3><?= number_format($totalApproved) ?></h3>
+            </div>
+        </div>
+
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon">📋</div>
+            <div>
+                <p>Completed</p>
+                <h3><?= number_format($totalCompleted) ?></h3>
+            </div>
+        </div>
+
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon">✕</div>
+            <div>
+                <p>Cancelled</p>
+                <h3><?= number_format($totalCancelled) ?></h3>
+            </div>
+        </div>
+
+    </section>
 
     <!-- APPOINTMENTS TABLE -->
-    <div class="appointment-table-section">
+    <section class="admin-table-card">
 
         <h3>Appointment Records</h3>
 
-        <div class="table-wrap">
+        <!-- SEARCH AND FILTER -->
+        <form method="GET" class="appointment-filter">
+
+            <input
+                type="text"
+                name="search"
+                placeholder="Search pet, owner, or reason..."
+                value="<?= h($search) ?>"
+            >
+
+            <select name="status">
+                <option value="">All Statuses</option>
+
+                <option value="Pending"
+                    <?= $filter_status === 'Pending' ? 'selected' : '' ?>>
+                    Pending
+                </option>
+
+                <option value="Approved"
+                    <?= $filter_status === 'Approved' ? 'selected' : '' ?>>
+                    Approved
+                </option>
+
+                <option value="Completed"
+                    <?= $filter_status === 'Completed' ? 'selected' : '' ?>>
+                    Completed
+                </option>
+
+                <option value="Cancelled"
+                    <?= $filter_status === 'Cancelled' ? 'selected' : '' ?>>
+                    Cancelled
+                </option>
+            </select>
+
+            <button type="submit" class="appointment-btn btn-filter">
+                🔍 Search / Filter
+            </button>
+
+            <a href="admin_appointment.php" class="appointment-btn btn-reset">
+                Reset
+            </a>
+
+        </form>
+
+        <p class="appointment-result-count">
+            Showing <?= $result->num_rows ?> appointment record(s)
+        </p>
+
+        <div class="admin-table-wrap">
 
             <table>
 
-                <tr>
-                    <th>Owner</th>
-                    <th>Pet</th>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Update Status</th>
-                    <th>Action</th>
-                </tr>
+                <thead>
+                    <tr>
+                        <th>Owner</th>
+                        <th>Pet</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Update Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
 
-                <?php if ($result->num_rows > 0) { ?>
+                <tbody>
 
-                    <?php while ($row = $result->fetch_assoc()) { ?>
+                <?php if ($result->num_rows > 0): ?>
+
+                    <?php while ($row = $result->fetch_assoc()): ?>
+
+                        <?php
+                        $statusClass = match ($row['status']) {
+                            'Pending' => 'status-pending',
+                            'Approved' => 'status-approved',
+                            'Completed' => 'status-completed',
+                            'Cancelled' => 'status-cancelled',
+                            default => 'status-pending'
+                        };
+                        ?>
 
                         <tr>
 
-                            <td><?php echo h($row['owner']); ?></td>
+                            <td class="appointment-owner">
+                                <?= h($row['owner']) ?>
+                            </td>
 
-                            <td><?php echo h($row['pet_name']); ?></td>
+                            <td class="appointment-pet">
+                                <?= h($row['pet_name']) ?>
+                            </td>
 
-                            <td><?php echo h($row['date']); ?></td>
+                            <td><?= h($row['date']) ?></td>
 
-                            <td><?php echo h($row['time']); ?></td>
+                            <td><?= h($row['time']) ?></td>
 
-                            <td><?php echo h($row['reason']); ?></td>
+                            <td><?= h($row['reason']) ?></td>
 
                             <td>
-                                <?php
-                                $statusClass = strtolower($row['status']);
-
-                                if ($statusClass === 'pending') {
-                                    $statusClass = 'status-pending';
-                                } elseif ($statusClass === 'approved') {
-                                    $statusClass = 'status-approved';
-                                } elseif ($statusClass === 'completed') {
-                                    $statusClass = 'status-completed';
-                                } else {
-                                    $statusClass = 'status-cancelled';
-                                }
-                                ?>
-
-                                <span class="<?php echo $statusClass; ?>">
-                                    <?php echo h($row['status']); ?>
+                                <span class="appointment-status <?= $statusClass ?>">
+                                    <?= h($row['status']) ?>
                                 </span>
                             </td>
 
@@ -349,37 +635,44 @@ $totalCancelled = getAppointmentCount($conn, 'Cancelled');
 
                                 <form method="POST" class="status-update-form">
 
-                                    <input type="hidden" name="csrf_token"
-                                           value="<?php echo h(csrf_token()); ?>">
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="<?= h(csrf_token()) ?>"
+                                    >
 
-                                    <input type="hidden" name="appointment_id"
-                                           value="<?php echo (int)$row['id']; ?>">
+                                    <input
+                                        type="hidden"
+                                        name="appointment_id"
+                                        value="<?= (int)$row['id'] ?>"
+                                    >
 
-                                    <input type="hidden" name="action"
-                                           value="update_status">
+                                    <input
+                                        type="hidden"
+                                        name="action"
+                                        value="update_status"
+                                    >
 
                                     <select name="status" required>
-
                                         <option value="Pending"
-                                            <?php echo $row['status'] === 'Pending' ? 'selected' : ''; ?>>
+                                            <?= $row['status'] === 'Pending' ? 'selected' : '' ?>>
                                             Pending
                                         </option>
 
                                         <option value="Approved"
-                                            <?php echo $row['status'] === 'Approved' ? 'selected' : ''; ?>>
+                                            <?= $row['status'] === 'Approved' ? 'selected' : '' ?>>
                                             Approved
                                         </option>
 
                                         <option value="Completed"
-                                            <?php echo $row['status'] === 'Completed' ? 'selected' : ''; ?>>
+                                            <?= $row['status'] === 'Completed' ? 'selected' : '' ?>>
                                             Completed
                                         </option>
 
                                         <option value="Cancelled"
-                                            <?php echo $row['status'] === 'Cancelled' ? 'selected' : ''; ?>>
+                                            <?= $row['status'] === 'Cancelled' ? 'selected' : '' ?>>
                                             Cancelled
                                         </option>
-
                                     </select>
 
                                     <button type="submit" class="update-button">
@@ -393,20 +686,31 @@ $totalCancelled = getAppointmentCount($conn, 'Cancelled');
                             <!-- DELETE -->
                             <td>
 
-                                <form method="POST"
-                                      onsubmit="return confirm('Are you sure you want to delete this appointment?');">
+                                <form
+                                    method="POST"
+                                    onsubmit="return confirm('Are you sure you want to delete this appointment?');"
+                                >
 
-                                    <input type="hidden" name="csrf_token"
-                                           value="<?php echo h(csrf_token()); ?>">
+                                    <input
+                                        type="hidden"
+                                        name="csrf_token"
+                                        value="<?= h(csrf_token()) ?>"
+                                    >
 
-                                    <input type="hidden" name="appointment_id"
-                                           value="<?php echo (int)$row['id']; ?>">
+                                    <input
+                                        type="hidden"
+                                        name="appointment_id"
+                                        value="<?= (int)$row['id'] ?>"
+                                    >
 
-                                    <input type="hidden" name="action"
-                                           value="delete">
+                                    <input
+                                        type="hidden"
+                                        name="action"
+                                        value="delete"
+                                    >
 
                                     <button type="submit" class="delete-button">
-                                        Delete
+                                        🗑 Delete
                                     </button>
 
                                 </form>
@@ -415,9 +719,9 @@ $totalCancelled = getAppointmentCount($conn, 'Cancelled');
 
                         </tr>
 
-                    <?php } ?>
+                    <?php endwhile; ?>
 
-                <?php } else { ?>
+                <?php else: ?>
 
                     <tr>
                         <td colspan="8" class="empty-message">
@@ -425,15 +729,21 @@ $totalCancelled = getAppointmentCount($conn, 'Cancelled');
                         </td>
                     </tr>
 
-                <?php } ?>
+                <?php endif; ?>
+
+                </tbody>
 
             </table>
 
         </div>
 
-    </div>
+    </section>
 
-</div>
+</main>
 
 </body>
 </html>
+
+<?php
+$stmt->close();
+?>

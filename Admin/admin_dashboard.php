@@ -2,107 +2,209 @@
 <?php
 require_once '../db/db.php';
 
-/* ADMIN ACCESS CHECK */
 $admin_id = require_admin($conn);
 
-/* COUNT HELPER */
-function getCount($conn, $sql) {
-    $result = mysqli_query($conn, $sql);
+/* =====================================
+   DASHBOARD COUNT FUNCTION
+===================================== */
+function getCount($conn, $sql, $types = '', $params = []) {
+    $stmt = $conn->prepare($sql);
 
-    if (!$result) {
+    if (!$stmt) {
         return 0;
     }
 
-    $row = mysqli_fetch_assoc($result);
+    if ($types !== '') {
+        $stmt->bind_param($types, ...$params);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+
+    $stmt->close();
+
     return (int)($row['total'] ?? 0);
 }
 
-/* =========================
-   DASHBOARD STATISTICS
-========================= */
+/* =====================================
+   MAIN STATISTICS
+===================================== */
 
-$totalUsers = getCount($conn,
+$total_users = getCount(
+    $conn,
     "SELECT COUNT(*) AS total FROM users WHERE role = 'user'"
 );
 
-$totalPets = getCount($conn,
+$total_pets = getCount(
+    $conn,
     "SELECT COUNT(*) AS total FROM pets"
 );
 
-$totalVaccines = getCount($conn,
+$total_vaccines = getCount(
+    $conn,
     "SELECT COUNT(*) AS total FROM vaccines"
 );
 
-$totalAppointments = getCount($conn,
+$total_appointments = getCount(
+    $conn,
     "SELECT COUNT(*) AS total FROM appointments"
 );
 
-$pendingUsers = getCount($conn,
-    "SELECT COUNT(*) AS total FROM users
+$total_medical = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total FROM medical_history"
+);
+
+/* =====================================
+   USER ACCOUNT OVERVIEW
+===================================== */
+
+$pending_users = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM users
      WHERE role = 'user' AND status = 'pending'"
 );
 
-$overdueVaccines = getCount($conn,
-    "SELECT COUNT(*) AS total FROM vaccines
+$active_users = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM users
+     WHERE role = 'user' AND status = 'active'"
+);
+
+/* =====================================
+   VACCINE OVERVIEW
+===================================== */
+
+$overdue_vaccines = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM vaccines
      WHERE next_schedule IS NOT NULL
      AND next_schedule < CURDATE()"
 );
 
-$upcomingVaccines = getCount($conn,
-    "SELECT COUNT(*) AS total FROM vaccines
-     WHERE next_schedule BETWEEN CURDATE()
-     AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
+$upcoming_vaccines = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM vaccines
+     WHERE next_schedule IS NOT NULL
+     AND next_schedule >= CURDATE()
+     AND next_schedule <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
 );
 
-$todayAppointments = getCount($conn,
-    "SELECT COUNT(*) AS total FROM appointments
-     WHERE date = CURDATE()"
+/* =====================================
+   APPOINTMENT OVERVIEW
+===================================== */
+
+$today_appointments = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM appointments
+     WHERE `date` = CURDATE()
+     AND status NOT IN ('Cancelled', 'Completed')"
 );
 
-$upcomingAppointments = getCount($conn,
-    "SELECT COUNT(*) AS total FROM appointments
-     WHERE date >= CURDATE()"
+$upcoming_appointments = getCount(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM appointments
+     WHERE `date` >= CURDATE()
+     AND status NOT IN ('Cancelled', 'Completed')"
 );
 
-/* =========================
+/* =====================================
    RECENT USERS
-========================= */
+===================================== */
 
-$recentuser = mysqli_query($conn,
-    "SELECT name, username, status
+$recent_users = $conn->query(
+    "SELECT name, username, email, status
      FROM users
      WHERE role = 'user'
      ORDER BY id DESC
      LIMIT 5"
 );
 
-/* =========================
+/* =====================================
    RECENT PETS
-========================= */
+===================================== */
 
-$recentpets = mysqli_query($conn,
-    "SELECT p.pet_name, p.type, u.username
-     FROM pets p
-     JOIN users u ON p.user_id = u.id
-     ORDER BY p.id DESC
+$recent_pets = $conn->query(
+    "SELECT pets.pet_name, pets.type, users.name AS owner_name
+     FROM pets
+     INNER JOIN users ON pets.user_id = users.id
+     ORDER BY pets.id DESC
      LIMIT 5"
 );
 
-/* =========================
+/* =====================================
    UPCOMING APPOINTMENTS
-========================= */
+===================================== */
 
-$appointments = mysqli_query($conn,
-    "SELECT a.date, a.time, a.reason,
-            p.pet_name, u.username
-     FROM appointments a
-     JOIN pets p ON a.pet_id = p.id
-     JOIN users u ON p.user_id = u.id
-     WHERE a.date >= CURDATE()
-     ORDER BY a.date ASC, a.time ASC
+$appointments = $conn->query(
+    "SELECT
+        appointments.id,
+        appointments.date,
+        appointments.time,
+        appointments.reason,
+        appointments.status,
+        pets.pet_name,
+        users.name AS owner_name
+     FROM appointments
+     INNER JOIN pets ON appointments.pet_id = pets.id
+     INNER JOIN users ON pets.user_id = users.id
+     WHERE appointments.date >= CURDATE()
+     AND appointments.status NOT IN ('Cancelled', 'Completed')
+     ORDER BY appointments.date ASC, appointments.time ASC
      LIMIT 5"
 );
 
+/* =====================================
+   ADMIN INFORMATION
+===================================== */
+
+$admin_name = 'Administrator';
+
+$stmt = $conn->prepare(
+    "SELECT name FROM users WHERE id = ? LIMIT 1"
+);
+
+if ($stmt) {
+    $stmt->bind_param("i", $admin_id);
+    $stmt->execute();
+
+    $admin_result = $stmt->get_result();
+
+    if ($admin_row = $admin_result->fetch_assoc()) {
+        $admin_name = $admin_row['name'];
+    }
+
+    $stmt->close();
+}
+
+/* =====================================
+   STATUS CLASS FUNCTION
+===================================== */
+
+function appointmentStatusClass($status) {
+    $status = strtolower(trim($status));
+
+    switch ($status) {
+        case 'approved':
+            return 'approved';
+
+        case 'completed':
+            return 'completed';
+
+        case 'cancelled':
+            return 'cancelled';
+
+        default:
+            return 'pending';
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -113,278 +215,510 @@ $appointments = mysqli_query($conn,
 
     <title>Admin Dashboard | Pet-Care</title>
 
-    <link rel="stylesheet" href="admin.css?v=3">
+    <link rel="stylesheet" href="admin.css?v=5">
 </head>
 
-<body>
+<body class="professional-dashboard">
 
-<!-- SIDEBAR -->
-<div class="sidebar">
+<!-- =====================================
+     SIDEBAR
+===================================== -->
 
-    <h2>🐾 Admin Panel</h2>
+<aside class="sidebar">
 
-    <a href="admin_dashboard.php" class="active">Dashboard</a>
-    <a href="manage_users.php">Manage Users</a>
-    <a href="manage_pets.php">Manage Pets</a>
-    <a href="admin_vaccine.php">Vaccines</a>
-    <a href="admin_medical.php">Medical</a>
-    <a href="admin_appointment.php">Appointments</a>
-    <a href="reports.php">Reports</a>
-    <a href="../Account/logout.php">Logout</a>
+    <div class="admin-sidebar-brand">
 
-</div>
+        <div class="admin-brand-icon">🐾</div>
 
-<!-- MAIN CONTENT -->
-<div class="main">
+        <div>
+            <h1>Pet-Care</h1>
+            <span>Veterinary Portal</span>
+        </div>
 
-    <div class="page-title">
-        <h2>Admin Dashboard 📊</h2>
-        <p>Welcome to the Pet-Care Management System.</p>
     </div>
 
-    <!-- SUMMARY CARDS -->
-    <div class="dashboard-cards">
+    <p class="admin-sidebar-label">MAIN MENU</p>
 
-        <div class="dashboard-card">
-            <div class="card-icon">👤</div>
+    <nav class="sidebar-nav">
+
+        <a href="admin_dashboard.php" class="active">
+            <span class="admin-nav-icon">▦</span>
+            Dashboard
+        </a>
+
+        <a href="manage_users.php">
+            <span class="admin-nav-icon">👥</span>
+            Manage Users
+        </a>
+
+        <a href="manage_pets.php">
+            <span class="admin-nav-icon">🐾</span>
+            Manage Pets
+        </a>
+
+        <a href="admin_vaccine.php">
+            <span class="admin-nav-icon">💉</span>
+            Vaccines
+        </a>
+
+        <a href="admin_medical.php">
+            <span class="admin-nav-icon">🩺</span>
+            Medical Records
+        </a>
+
+        <a href="admin_appointment.php">
+            <span class="admin-nav-icon">📅</span>
+            Appointments
+        </a>
+
+        <a href="reports.php">
+            <span class="admin-nav-icon">📊</span>
+            Reports
+        </a>
+
+    </nav>
+
+    <div class="admin-sidebar-bottom">
+
+        <div class="admin-sidebar-user">
+
+            <div class="admin-user-avatar">👤</div>
+
+            <div>
+                <strong><?= h($admin_name) ?></strong>
+                <span>Administrator</span>
+            </div>
+
+        </div>
+
+        <a href="../Account/logout.php" class="admin-logout-link">
+            <span class="admin-nav-icon">↪</span>
+            Logout
+        </a>
+
+    </div>
+
+</aside>
+
+
+<!-- =====================================
+     MAIN CONTENT
+===================================== -->
+
+<main class="main professional-main">
+
+    <!-- TOPBAR -->
+
+    <header class="admin-dashboard-topbar">
+
+        <div>
+            <h2>Admin Dashboard</h2>
+            <p>Welcome back! Here's your clinic overview.</p>
+        </div>
+
+        <div class="date-card">
+            📅 <?= date('F d, Y') ?>
+        </div>
+
+    </header>
+
+
+    <!-- =====================================
+         MAIN STATISTICS
+    ====================================== -->
+
+    <section class="admin-stats-grid">
+
+        <div class="admin-stat-card">
+
+            <div class="admin-stat-icon">👥</div>
+
             <div>
                 <h3>Total Users</h3>
-                <p><?php echo $totalUsers; ?></p>
+                <p><?= $total_users ?></p>
             </div>
+
         </div>
 
-        <div class="dashboard-card">
-            <div class="card-icon">🐾</div>
+
+        <div class="admin-stat-card">
+
+            <div class="admin-stat-icon">🐾</div>
+
             <div>
                 <h3>Total Pets</h3>
-                <p><?php echo $totalPets; ?></p>
+                <p><?= $total_pets ?></p>
             </div>
+
         </div>
 
-        <div class="dashboard-card">
-            <div class="card-icon">💉</div>
+
+        <div class="admin-stat-card">
+
+            <div class="admin-stat-icon">💉</div>
+
             <div>
                 <h3>Total Vaccines</h3>
-                <p><?php echo $totalVaccines; ?></p>
+                <p><?= $total_vaccines ?></p>
             </div>
+
         </div>
 
-        <div class="dashboard-card">
-            <div class="card-icon">📅</div>
+
+        <div class="admin-stat-card">
+
+            <div class="admin-stat-icon">📅</div>
+
             <div>
                 <h3>Appointments</h3>
-                <p><?php echo $totalAppointments; ?></p>
+                <p><?= $total_appointments ?></p>
             </div>
+
         </div>
 
-        <div class="dashboard-card warning-card">
-            <div class="card-icon">⚠️</div>
+
+        <div class="admin-stat-card">
+
+            <div class="admin-stat-icon">🩺</div>
+
             <div>
-                <h3>Overdue Vaccines</h3>
-                <p><?php echo $overdueVaccines; ?></p>
+                <h3>Medical Records</h3>
+                <p><?= $total_medical ?></p>
             </div>
+
         </div>
 
-        <div class="dashboard-card pending-card">
-            <div class="card-icon">⏳</div>
-            <div>
-                <h3>Pending Accounts</h3>
-                <p><?php echo $pendingUsers; ?></p>
-            </div>
+    </section>
+
+
+    <!-- =====================================
+         OVERVIEW
+    ====================================== -->
+
+    <h3 class="section-title">Clinic Overview</h3>
+
+    <section class="admin-overview-grid">
+
+        <div class="admin-overview-card">
+
+            <h3>Pending User Accounts</h3>
+
+            <p><?= $pending_users ?></p>
+
+            <span>Accounts waiting for approval</span>
+
         </div>
 
-    </div>
 
-    <!-- APPOINTMENT AND VACCINE OVERVIEW -->
-    <h3 class="section-title">System Overview</h3>
+        <div class="admin-overview-card">
 
-    <div class="overview-grid">
+            <h3>Active Users</h3>
 
-        <div class="overview-card">
-            <h3>📅 Appointments Today</h3>
-            <p class="overview-number"><?php echo $todayAppointments; ?></p>
-            <span>Appointments scheduled for today</span>
+            <p><?= $active_users ?></p>
+
+            <span>Currently active pet owners</span>
+
         </div>
 
-        <div class="overview-card">
-            <h3>🗓️ Upcoming Appointments</h3>
-            <p class="overview-number"><?php echo $upcomingAppointments; ?></p>
-            <span>Appointments from today onward</span>
+
+        <div class="admin-overview-card">
+
+            <h3>Overdue Vaccines</h3>
+
+            <p><?= $overdue_vaccines ?></p>
+
+            <span>Vaccines past their schedule</span>
+
         </div>
 
-        <div class="overview-card">
-            <h3>💉 Upcoming Vaccinations</h3>
-            <p class="overview-number"><?php echo $upcomingVaccines; ?></p>
-            <span>Due within the next 30 days</span>
+
+        <div class="admin-overview-card">
+
+            <h3>Upcoming Vaccines</h3>
+
+            <p><?= $upcoming_vaccines ?></p>
+
+            <span>Scheduled within the next 7 days</span>
+
         </div>
 
-        <div class="overview-card">
-            <h3>⚠️ Overdue Vaccinations</h3>
-            <p class="overview-number"><?php echo $overdueVaccines; ?></p>
-            <span>Past their scheduled date</span>
+
+        <div class="admin-overview-card">
+
+            <h3>Today's Appointments</h3>
+
+            <p><?= $today_appointments ?></p>
+
+            <span>Appointments scheduled today</span>
+
         </div>
 
-    </div>
 
-    <!-- QUICK ACTIONS -->
+        <div class="admin-overview-card">
+
+            <h3>Upcoming Appointments</h3>
+
+            <p><?= $upcoming_appointments ?></p>
+
+            <span>Pending or approved future appointments</span>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================
+         QUICK ACTIONS
+    ====================================== -->
+
     <h3 class="section-title">Quick Actions</h3>
 
-    <div class="quick-actions">
+    <section class="admin-quick-actions">
 
-        <a href="manage_users.php">👤 Manage Users</a>
+        <a href="manage_users.php">
+            👥 Manage Users
+        </a>
 
-        <a href="manage_pets.php">🐾 Manage Pets</a>
+        <a href="manage_pets.php">
+            🐾 Manage Pets
+        </a>
 
-        <a href="admin_appointment.php">📅 Manage Appointments</a>
+        <a href="admin_vaccine.php">
+            💉 Manage Vaccines
+        </a>
 
-        <a href="reports.php">📊 View Reports</a>
+        <a href="admin_appointment.php">
+            📅 Manage Appointments
+        </a>
 
-    </div>
+        <a href="reports.php">
+            📊 View Reports
+        </a>
 
-    <!-- UPCOMING APPOINTMENTS -->
-    <div class="dashboard-section">
+    </section>
 
-        <h3>📅 Upcoming Appointments</h3>
 
-        <div class="table-wrap">
+    <!-- =====================================
+         RECENT USERS
+    ====================================== -->
+
+    <section class="admin-table-card">
+
+        <h3>Recently Registered Users</h3>
+
+        <div class="admin-table-wrap">
 
             <table>
-                <tr>
-                    <th>Owner</th>
-                    <th>Pet Name</th>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Reason</th>
-                </tr>
 
-                <?php if ($appointments && mysqli_num_rows($appointments) > 0) { ?>
-
-                    <?php while ($row = mysqli_fetch_assoc($appointments)) { ?>
-
-                        <tr>
-                            <td><?php echo h($row['username']); ?></td>
-                            <td><?php echo h($row['pet_name']); ?></td>
-                            <td><?php echo h($row['date']); ?></td>
-                            <td><?php echo h($row['time']); ?></td>
-                            <td><?php echo h($row['reason']); ?></td>
-                        </tr>
-
-                    <?php } ?>
-
-                <?php } else { ?>
-
+                <thead>
                     <tr>
-                        <td colspan="5" class="empty-message">
-                            No upcoming appointments.
-                        </td>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Status</th>
                     </tr>
+                </thead>
 
-                <?php } ?>
+                <tbody>
 
-            </table>
+                <?php if ($recent_users && $recent_users->num_rows > 0): ?>
 
-        </div>
+                    <?php while ($user = $recent_users->fetch_assoc()): ?>
 
-    </div>
+                        <?php
+                            $user_status = strtolower(trim($user['status'] ?? 'pending'));
 
-    <!-- RECENT USERS -->
-    <div class="dashboard-section">
-
-        <h3>👤 Recent Users</h3>
-
-        <div class="table-wrap">
-
-            <table>
-                <tr>
-                    <th>Name</th>
-                    <th>Username</th>
-                    <th>Status</th>
-                </tr>
-
-                <?php if ($recentuser && mysqli_num_rows($recentuser) > 0) { ?>
-
-                    <?php while ($row = mysqli_fetch_assoc($recentuser)) { ?>
+                            $user_status_class = in_array(
+                                $user_status,
+                                ['active', 'pending', 'inactive'],
+                                true
+                            ) ? $user_status : 'pending';
+                        ?>
 
                         <tr>
-                            <td><?php echo h($row['name']); ?></td>
-                            <td><?php echo h($row['username']); ?></td>
+
+                            <td><?= h($user['name']) ?></td>
+
+                            <td><?= h($user['username']) ?></td>
+
+                            <td><?= h($user['email'] ?? '') ?></td>
 
                             <td>
-                                <?php
-                                $status = strtolower($row['status'] ?? '');
-
-                                if ($status === 'active') {
-                                    echo '<span class="status-active">Active</span>';
-                                } elseif ($status === 'pending') {
-                                    echo '<span class="status-pending">Pending</span>';
-                                } else {
-                                    echo '<span class="status-inactive">Inactive</span>';
-                                }
-                                ?>
+                                <span class="admin-status <?= h($user_status_class) ?>">
+                                    <?= h(ucfirst($user_status)) ?>
+                                </span>
                             </td>
+
                         </tr>
 
-                    <?php } ?>
+                    <?php endwhile; ?>
 
-                <?php } else { ?>
+                <?php else: ?>
 
                     <tr>
-                        <td colspan="3" class="empty-message">
+                        <td colspan="4" class="empty-message">
                             No registered users found.
                         </td>
                     </tr>
 
-                <?php } ?>
+                <?php endif; ?>
+
+                </tbody>
 
             </table>
 
         </div>
 
-    </div>
+    </section>
 
-    <!-- RECENT PETS -->
-    <div class="dashboard-section">
 
-        <h3>🐾 Recent Pets</h3>
+    <!-- =====================================
+         RECENT PETS
+    ====================================== -->
 
-        <div class="table-wrap">
+    <section class="admin-table-card">
+
+        <h3>Recently Added Pets</h3>
+
+        <div class="admin-table-wrap">
 
             <table>
-                <tr>
-                    <th>Owner</th>
-                    <th>Pet Name</th>
-                    <th>Type</th>
-                </tr>
 
-                <?php if ($recentpets && mysqli_num_rows($recentpets) > 0) { ?>
+                <thead>
+                    <tr>
+                        <th>Pet Name</th>
+                        <th>Pet Type</th>
+                        <th>Owner</th>
+                    </tr>
+                </thead>
 
-                    <?php while ($row = mysqli_fetch_assoc($recentpets)) { ?>
+                <tbody>
+
+                <?php if ($recent_pets && $recent_pets->num_rows > 0): ?>
+
+                    <?php while ($pet = $recent_pets->fetch_assoc()): ?>
 
                         <tr>
-                            <td><?php echo h($row['username']); ?></td>
-                            <td><?php echo h($row['pet_name']); ?></td>
-                            <td><?php echo h($row['type']); ?></td>
+
+                            <td><?= h($pet['pet_name']) ?></td>
+
+                            <td><?= h($pet['type']) ?></td>
+
+                            <td><?= h($pet['owner_name']) ?></td>
+
                         </tr>
 
-                    <?php } ?>
+                    <?php endwhile; ?>
 
-                <?php } else { ?>
+                <?php else: ?>
 
                     <tr>
                         <td colspan="3" class="empty-message">
-                            No pets registered yet.
+                            No pets have been added yet.
                         </td>
                     </tr>
 
-                <?php } ?>
+                <?php endif; ?>
+
+                </tbody>
 
             </table>
 
         </div>
 
-    </div>
+    </section>
 
-</div>
+
+    <!-- =====================================
+         UPCOMING APPOINTMENTS
+    ====================================== -->
+
+    <section class="admin-table-card">
+
+        <h3>Upcoming Appointments</h3>
+
+        <div class="admin-table-wrap">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Pet Name</th>
+                        <th>Owner</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                <?php if ($appointments && $appointments->num_rows > 0): ?>
+
+                    <?php while ($appointment = $appointments->fetch_assoc()): ?>
+
+                        <tr>
+
+                            <td>
+                                <?= h($appointment['pet_name']) ?>
+                            </td>
+
+                            <td>
+                                <?= h($appointment['owner_name']) ?>
+                            </td>
+
+                            <td>
+                                <?= h(date(
+                                    'M d, Y',
+                                    strtotime($appointment['date'])
+                                )) ?>
+                            </td>
+
+                            <td>
+                                <?= h($appointment['time']) ?>
+                            </td>
+
+                            <td>
+                                <?= h($appointment['reason']) ?>
+                            </td>
+
+                            <td>
+
+                                <?php
+                                    $status = $appointment['status'] ?? 'Pending';
+                                    $status_class = appointmentStatusClass($status);
+                                ?>
+
+                                <span class="admin-status <?= h($status_class) ?>">
+                                    <?= h($status) ?>
+                                </span>
+
+                            </td>
+
+                        </tr>
+
+                    <?php endwhile; ?>
+
+                <?php else: ?>
+
+                    <tr>
+                        <td colspan="6" class="empty-message">
+                            No upcoming appointments.
+                        </td>
+                    </tr>
+
+                <?php endif; ?>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+</main>
 
 </body>
 </html>
