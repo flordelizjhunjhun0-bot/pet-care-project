@@ -226,64 +226,59 @@ button:hover {
         width: 100%;
     }
 }
-/* PET ACTION BUTTONS */
-.pet-action-buttons {
+
+
+/* PET DETAILS - ADD BUTTONS */
+
+.action-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
     margin: 20px 0;
-    align-items: center;
 }
 
-.pet-action-buttons .button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 13px 20px;
-    min-height: 45px;
+.action-buttons .button {
+    display: inline-block;
+    padding: 12px 20px;
+    background-color: #245C3A;
+    color: #FFFFFF;
+    text-decoration: none;
     border-radius: 8px;
-    color: white !important;
-    text-decoration: none !important;
     font-size: 14px;
     font-weight: 600;
     border: none;
-    cursor: pointer;
     transition: 0.2s ease;
 }
 
-.pet-action-buttons .button:hover {
+.action-buttons .button:hover {
+    background-color: #3D8B50;
     transform: translateY(-2px);
-    filter: brightness(0.90);
 }
 
-.btn-vaccine {
-    background: #2878c8;
+/* TABLE RESPONSIVE */
+
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
 }
 
-.btn-medical {
-    background: #26966b;
+.table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
 }
 
-.btn-appointment {
-    background: #7952b3;
-}
-
-.btn-edit-pet {
-    background: #e69b32;
-}
-
-.btn-back {
-    background: #64748b;
-}
+/* MOBILE VIEW */
 
 @media (max-width: 768px) {
-    .pet-action-buttons {
-        display: grid;
-        grid-template-columns: 1fr;
+    .action-buttons {
+        flex-direction: column;
     }
 
-    .pet-action-buttons .button {
-        width: 100%;
-        box-sizing: border-box;
+    .action-buttons .button {
+        text-align: center;
+    }
+
+    .table-wrap table {
+        min-width: 650px;
     }
 }

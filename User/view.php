@@ -1,8 +1,10 @@
 
 <?php
+
 require_once '../db/db.php';
 
 $user_id = require_user($conn);
+
 $pet_id = valid_id($_GET['pet_id'] ?? 0);
 
 if (!$pet_id) {
@@ -10,12 +12,15 @@ if (!$pet_id) {
     exit("Invalid pet ID.");
 }
 
-// Get pet information owned by the logged-in user
+/* Get pet information owned by logged-in user */
 $stmt = $conn->prepare(
-    "SELECT * FROM pets
-     WHERE id = ? AND user_id = ?
+    "SELECT *
+     FROM pets
+     WHERE id = ?
+     AND user_id = ?
      LIMIT 1"
 );
+
 $stmt->bind_param("ii", $pet_id, $user_id);
 $stmt->execute();
 
@@ -26,49 +31,64 @@ if (!$pet) {
     exit("Pet not found or access denied.");
 }
 
-// Get vaccine records
+/* Get vaccine records */
 $stmt = $conn->prepare(
-    "SELECT * FROM vaccines
+    "SELECT *
+     FROM vaccines
      WHERE pet_id = ?
      ORDER BY date_given DESC"
 );
+
 $stmt->bind_param("i", $pet_id);
 $stmt->execute();
+
 $vaccine_query = $stmt->get_result();
 
-// Get medical history
+/* Get medical history */
 $stmt = $conn->prepare(
-    "SELECT * FROM medical_history
+    "SELECT *
+     FROM medical_history
      WHERE pet_id = ?
      ORDER BY `date` DESC"
 );
+
 $stmt->bind_param("i", $pet_id);
 $stmt->execute();
+
 $medical_query = $stmt->get_result();
 
-// Get appointments
+/* Get appointments */
 $stmt = $conn->prepare(
-    "SELECT * FROM appointments
+    "SELECT *
+     FROM appointments
      WHERE pet_id = ?
      ORDER BY `date` DESC, `time` DESC"
 );
+
 $stmt->bind_param("i", $pet_id);
 $stmt->execute();
+
 $appointment_query = $stmt->get_result();
 
 $today = date('Y-m-d');
+
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
 
     <title>Pet Details | Pet-Care</title>
 
-    <!-- CSS CONNECTION -->
+    <!-- EXISTING CSS -->
     <link rel="stylesheet" href="./users.css?v=3">
+
 </head>
 
 <body>
@@ -89,8 +109,11 @@ $today = date('Y-m-d');
 <div class="main">
 
     <div class="page-title">
+
         <h2>🐾 Pet Details</h2>
+
         <p>Manage your pet's information and health records.</p>
+
     </div>
 
     <!-- PET INFORMATION -->
@@ -105,30 +128,26 @@ $today = date('Y-m-d');
 
     </div>
 
-    <!-- PET ACTION BUTTONS -->
-    <div class="pet-action-buttons">
+    <br>
 
-        <a href="add_vaccine.php?pet_id=<?= (int)$pet_id ?>"
-           class="button btn-vaccine">
+    <!-- ADD ACTION BUTTONS -->
+    <div class="action-buttons">
+
+        <a class="button"
+           href="add_vaccine.php?pet_id=<?= (int)$pet_id ?>">
             💉 Add Vaccine
         </a>
 
-        <a href="add_medical.php?pet_id=<?= (int)$pet_id ?>"
-           class="button btn-medical">
+        <a class="button"
+           href="add_medical.php?pet_id=<?= (int)$pet_id ?>">
             🩺 Add Medical Record
         </a>
 
-        <a href="add_appointment.php?pet_id=<?= (int)$pet_id ?>"
-           class="button btn-appointment">
+        <a class="button"
+           href="add_appointment.php?pet_id=<?= (int)$pet_id ?>">
             📅 Add Appointment
         </a>
-
-     
-
-        <a href="my_pet.php"
-           class="button btn-back">
-            ⬅ Back to My Pets
-        </a>
+        
 
     </div>
 
@@ -139,97 +158,79 @@ $today = date('Y-m-d');
 
     <div class="table-wrap">
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Vaccine</th>
-                    <th>Date Given</th>
-                    <th>Next Schedule</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
+    <table>
 
-            <tbody>
+        <tr>
+            <th>Vaccine</th>
+            <th>Date Given</th>
+            <th>Next Schedule</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
 
-            <?php if ($vaccine_query->num_rows === 0): ?>
+        <?php if ($vaccine_query->num_rows === 0): ?>
 
-                <tr>
-                    <td colspan="5">No vaccine records found.</td>
-                </tr>
+            <tr>
+                <td colspan="5">No vaccine records found.</td>
+            </tr>
 
-            <?php endif; ?>
+        <?php endif; ?>
 
-            <?php while ($row = $vaccine_query->fetch_assoc()): ?>
+        <?php while ($row = $vaccine_query->fetch_assoc()): ?>
 
-                <tr>
-                    <td><?= h($row['vaccine_name']) ?></td>
+            <tr>
 
-                    <td><?= h($row['date_given']) ?></td>
+                <td><?= h($row['vaccine_name']) ?></td>
 
-                    <td>
-                        <?= h($row['next_schedule'] ?: 'Not scheduled') ?>
-                    </td>
+                <td><?= h($row['date_given']) ?></td>
 
-                    <td>
-                        <?php if (empty($row['next_schedule'])): ?>
+                <td>
+                    <?= h($row['next_schedule'] ?: 'Not scheduled') ?>
+                </td>
 
-                            <span class="status-not-scheduled">
-                                NOT SCHEDULED
-                            </span>
+                <td>
 
-                        <?php elseif ($row['next_schedule'] < $today): ?>
+                    <?php
 
-                            <span class="status-overdue">
-                                OVERDUE
-                            </span>
+                    if (empty($row['next_schedule'])) {
 
-                        <?php else: ?>
+                        echo "Not scheduled";
 
-                            <span class="status-upcoming">
-                                UPCOMING
-                            </span>
+                    } elseif ($row['next_schedule'] < $today) {
 
-                        <?php endif; ?>
-                    </td>
+                        echo "<span style='color:red'>OVERDUE</span>";
 
-                    <td class="table-actions">
+                    } else {
 
-                        <a class="edit-link"
-                           href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
-                            Edit
-                        </a>
+                        echo "<span style='color:green'>UPCOMING</span>";
 
-                        <form method="POST"
-                              action="delete_vaccine.php"
-                              class="inline-form"
-                              onsubmit="return confirm('Delete this vaccine record?');">
+                    }
 
-                            <input type="hidden"
-                                   name="csrf_token"
-                                   value="<?= h(csrf_token()) ?>">
+                    ?>
 
-                            <input type="hidden"
-                                   name="id"
-                                   value="<?= (int)$row['id'] ?>">
+                </td>
 
-                            <input type="hidden"
-                                   name="pet_id"
-                                   value="<?= (int)$pet_id ?>">
+                <td>
+                     <div class="action-buttons">
+                    
 
-                            <button type="submit" class="delete-button">
-                                Delete
-                            </button>
+                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
+                        Edit
+                    </a>
 
-                        </form>
+                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                       onclick="return confirm('Delete this vaccine record?')">
+                        Delete
+                    </a>
+                    </div>
 
-                    </td>
-                </tr>
+                </td>
 
-            <?php endwhile; ?>
+            </tr>
 
-            </tbody>
-        </table>
+        <?php endwhile; ?>
+
+    </table>
 
     </div>
 
@@ -240,72 +241,57 @@ $today = date('Y-m-d');
 
     <div class="table-wrap">
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Diagnosis</th>
-                    <th>Treatment</th>
-                    <th>Notes</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
+    <table>
 
-            <tbody>
+        <tr>
+            <th>Date</th>
+            <th>Diagnosis</th>
+            <th>Treatment</th>
+            <th>Notes</th>
+            <th>Action</th>
+        </tr>
 
-            <?php if ($medical_query->num_rows === 0): ?>
+        <?php if ($medical_query->num_rows === 0): ?>
 
-                <tr>
-                    <td colspan="5">No medical records found.</td>
-                </tr>
+            <tr>
+                <td colspan="5">No medical records found.</td>
+            </tr>
 
-            <?php endif; ?>
+        <?php endif; ?>
 
-            <?php while ($row = $medical_query->fetch_assoc()): ?>
+        <?php while ($row = $medical_query->fetch_assoc()): ?>
 
-                <tr>
-                    <td><?= h($row['date']) ?></td>
-                    <td><?= h($row['diagnosis']) ?></td>
-                    <td><?= h($row['treatment']) ?></td>
-                    <td><?= h($row['notes']) ?></td>
+            <tr>
 
-                    <td class="table-actions">
+                <td><?= h($row['date']) ?></td>
 
-                        <a class="edit-link"
-                           href="edit_medical.php?id=<?= (int)$row['id'] ?>">
-                            Edit
-                        </a>
+                <td><?= h($row['diagnosis']) ?></td>
 
-                        <form method="POST"
-                              action="delete_medical.php"
-                              class="inline-form"
-                              onsubmit="return confirm('Delete this medical record?');">
+                <td><?= h($row['treatment']) ?></td>
 
-                            <input type="hidden"
-                                   name="csrf_token"
-                                   value="<?= h(csrf_token()) ?>">
+                <td><?= h($row['notes']) ?></td>
 
-                            <input type="hidden"
-                                   name="id"
-                                   value="<?= (int)$row['id'] ?>">
+                <td>
 
-                            <input type="hidden"
-                                   name="pet_id"
-                                   value="<?= (int)$pet_id ?>">
+                    <div class="action-buttons">
+                    
 
-                            <button type="submit" class="delete-button">
-                                Delete
-                            </button>
+                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
+                        Edit
+                    </a>
 
-                        </form>
+                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                       onclick="return confirm('Delete this vaccine record?')">
+                        Delete
+                    </a>
+                    </div>
+                </td>
 
-                    </td>
-                </tr>
+            </tr>
 
-            <?php endwhile; ?>
+        <?php endwhile; ?>
 
-            </tbody>
-        </table>
+    </table>
 
     </div>
 
@@ -316,91 +302,88 @@ $today = date('Y-m-d');
 
     <div class="table-wrap">
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
+    <table>
 
-            <tbody>
+        <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
 
-            <?php if ($appointment_query->num_rows === 0): ?>
+        <?php if ($appointment_query->num_rows === 0): ?>
 
-                <tr>
-                    <td colspan="5">No appointments found.</td>
-                </tr>
+            <tr>
+                <td colspan="5">No appointments found.</td>
+            </tr>
 
-            <?php endif; ?>
+        <?php endif; ?>
 
-            <?php while ($row = $appointment_query->fetch_assoc()): ?>
+        <?php while ($row = $appointment_query->fetch_assoc()): ?>
 
-                <tr>
-                    <td><?= h($row['date']) ?></td>
-                    <td><?= h($row['time']) ?></td>
-                    <td><?= h($row['reason']) ?></td>
+            <tr>
 
-                    <td>
-                        <?php if ($row['date'] < $today): ?>
+                <td><?= h($row['date']) ?></td>
 
-                            <span class="status-overdue">
-                                PAST
-                            </span>
+                <td><?= h($row['time']) ?></td>
 
-                        <?php else: ?>
+                <td><?= h($row['reason']) ?></td>
 
-                            <span class="status-upcoming">
-                                UPCOMING
-                            </span>
+                <td>
 
-                        <?php endif; ?>
-                    </td>
+                    <?php
 
-                    <td class="table-actions">
+                    if ($row['date'] < $today) {
 
-                        <a class="edit-link"
-                           href="edit_appointment.php?id=<?= (int)$row['id'] ?>">
-                            Edit
-                        </a>
+                        echo "<span style='color:red'>PAST</span>";
 
-                        <form method="POST"
-                              action="delete_appointment.php"
-                              class="inline-form"
-                              onsubmit="return confirm('Delete this appointment?');">
+                    } else {
 
-                            <input type="hidden"
-                                   name="csrf_token"
-                                   value="<?= h(csrf_token()) ?>">
+                        echo "<span style='color:green'>UPCOMING</span>";
 
-                            <input type="hidden"
-                                   name="id"
-                                   value="<?= (int)$row['id'] ?>">
+                    }
 
-                            <input type="hidden"
-                                   name="pet_id"
-                                   value="<?= (int)$pet_id ?>">
+                    ?>
 
-                            <button type="submit" class="delete-button">
-                                Delete
-                            </button>
+                </td>
 
-                        </form>
+                <td>
 
-                    </td>
-                </tr>
+                    <div class="action-buttons">
+                    
 
-            <?php endwhile; ?>
+                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
+                        Edit
+                    </a>
 
-            </tbody>
-        </table>
+                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                       onclick="return confirm('Delete this vaccine record?')">
+                        Delete
+                    </a>
+                    </div>
+
+                </td>
+
+            </tr>
+
+        <?php endwhile; ?>
+
+    </table>
 
     </div>
 
+    <br>
   
+ <div class="action-buttons">
+     <a class="button"
+    href="my_pet.php">Back to My Pets</a>
+
+
+ </div>
+ 
+
+
 
 </div>
 
