@@ -2,7 +2,7 @@
 <?php
 require_once '../db/db.php';
 
-/* CHECK USER LOGIN AND ACCOUNT STATUS */
+/* CHECK USER LOGIN */
 $currentuser = require_user($conn);
 
 /* COUNT HELPER */
@@ -24,10 +24,7 @@ function getUserCount($conn, $sql, $user_id) {
     return (int)($row['total'] ?? 0);
 }
 
-/* =========================
-   PET COUNTS
-========================= */
-
+/* PET COUNTS */
 $totalpets = getUserCount($conn,
     "SELECT COUNT(*) AS total
      FROM pets
@@ -57,10 +54,7 @@ $totalAllPets = getUserCount($conn,
     $currentuser
 );
 
-/* =========================
-   VACCINE COUNTS
-========================= */
-
+/* VACCINE COUNTS */
 $vac = getUserCount($conn,
     "SELECT COUNT(*) AS total
      FROM vaccines v
@@ -69,7 +63,6 @@ $vac = getUserCount($conn,
     $currentuser
 );
 
-/* OVERDUE VACCINES */
 $overdueVaccines = getUserCount($conn,
     "SELECT COUNT(*) AS total
      FROM vaccines v
@@ -80,7 +73,6 @@ $overdueVaccines = getUserCount($conn,
     $currentuser
 );
 
-/* UPCOMING VACCINES WITHIN 30 DAYS */
 $upcomingVaccines = getUserCount($conn,
     "SELECT COUNT(*) AS total
      FROM vaccines v
@@ -91,10 +83,7 @@ $upcomingVaccines = getUserCount($conn,
     $currentuser
 );
 
-/* =========================
-   APPOINTMENT COUNTS
-========================= */
-
+/* APPOINTMENT COUNTS */
 $totalAppointments = getUserCount($conn,
     "SELECT COUNT(*) AS total
      FROM appointments a
@@ -108,20 +97,19 @@ $upcomingAppointments = getUserCount($conn,
      FROM appointments a
      INNER JOIN pets p ON a.pet_id = p.id
      WHERE p.user_id = ?
-     AND a.date >= CURDATE()",
+     AND a.date >= CURDATE()
+     AND a.status IN ('Pending', 'Approved')",
     $currentuser
 );
 
-/* =========================
-   UPCOMING APPOINTMENTS
-========================= */
-
+/* UPCOMING APPOINTMENTS */
 $stmt = $conn->prepare(
-    "SELECT a.date, a.time, a.reason, p.pet_name
+    "SELECT a.date, a.time, a.reason, a.status, p.pet_name
      FROM appointments a
      INNER JOIN pets p ON a.pet_id = p.id
      WHERE p.user_id = ?
      AND a.date >= CURDATE()
+     AND a.status IN ('Pending', 'Approved')
      ORDER BY a.date ASC, a.time ASC
      LIMIT 5"
 );
@@ -130,10 +118,7 @@ $stmt->bind_param("i", $currentuser);
 $stmt->execute();
 $appointments = $stmt->get_result();
 
-/* =========================
-   VACCINATION REMINDERS
-========================= */
-
+/* VACCINATION REMINDERS */
 $stmt = $conn->prepare(
     "SELECT v.vaccine_name, v.next_schedule, p.pet_name
      FROM vaccines v
@@ -149,10 +134,7 @@ $stmt->bind_param("i", $currentuser);
 $stmt->execute();
 $vaccinationReminders = $stmt->get_result();
 
-/* =========================
-   RECENT MEDICAL RECORDS
-========================= */
-
+/* RECENT MEDICAL RECORDS */
 $stmt = $conn->prepare(
     "SELECT m.date, m.diagnosis, m.treatment, p.pet_name
      FROM medical_history m
@@ -166,313 +148,448 @@ $stmt->bind_param("i", $currentuser);
 $stmt->execute();
 $medicalRecords = $stmt->get_result();
 
+/* USERNAME */
 $username = $_SESSION['username'] ?? 'Pet Owner';
 
+/* DATE */
+$today = date('Y-m-d');
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>User Dashboard | Pet-Care</title>
 
-    <link rel="stylesheet" href="users.css?v=4">
+    <link rel="stylesheet" href="users.css?v=5">
 </head>
 
-<body>
+<body class="professional-dashboard">
 
 <!-- SIDEBAR -->
-<div class="sidebar">
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <div class="brand-icon">🐾</div>
+        <div>
+            <h1>Pet-Care</h1>
+            <span>Veterinary Portal</span>
+        </div>
+    </div>
 
-    <h1>🐾 Pet Care</h1>
+    <p class="sidebar-label">MAIN MENU</p>
 
-    <a href="user_dashboard.php" class="active">Dashboard</a>
-    <a href="add_pet.php">Add Pet</a>
-    <a href="my_pet.php">My Pets</a>
-    <a href="../Account/logout.php">Logout</a>
+    <nav class="sidebar-nav">
+        <a href="user_dashboard.php" class="active">
+            <span class="nav-icon">▦</span>
+            Dashboard
+        </a>
 
-</div>
+        <a href="add_pet.php">
+            <span class="nav-icon">＋</span>
+            Add Pet
+        </a>
+
+        <a href="my_pet.php">
+            <span class="nav-icon">🐾</span>
+            My Pets
+        </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+        <div class="sidebar-user">
+            <div class="user-avatar">👤</div>
+            <div>
+                <strong><?= h($username) ?></strong>
+                <span>Pet Owner</span>
+            </div>
+        </div>
+
+        <a href="../Account/logout.php" class="logout-link">
+            <span class="nav-icon">↪</span>
+            Logout
+        </a>
+    </div>
+</aside>
 
 <!-- MAIN CONTENT -->
-<div class="main">
+<main class="main professional-main">
+
+    <!-- TOP HEADER -->
+    <header class="dashboard-topbar">
+        <div>
+            <span class="topbar-label">PET OWNER PORTAL</span>
+            <h2>Dashboard</h2>
+        </div>
+
+        <div class="topbar-date">
+            <span>Today</span>
+            <strong><?= h(date('F d, Y')) ?></strong>
+        </div>
+    </header>
 
     <!-- WELCOME -->
-    <div class="text dashboard-welcome">
-        <h1>Welcome, <?php echo h($username); ?> 👋</h1>
-        <p>Your Pet Care Overview</p>
-    </div>
+    <section class="welcome-panel">
+        <div>
+            <span class="welcome-eyebrow">WELCOME BACK</span>
+            <h1>Hello, <?= h($username) ?>!</h1>
+            <p>Keep track of your pets' health, appointments, and vaccination schedules.</p>
 
-    <!-- PET SUMMARY -->
-    <h3 class="dashboard-heading">🐾 My Pets</h3>
+            <a href="my_pet.php" class="welcome-button">
+                View My Pets <span>→</span>
+            </a>
+        </div>
 
-    <div class="user-dashboard-cards">
+        <div class="welcome-illustration">🐶</div>
+    </section>
 
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">🐶</div>
+    <!-- PET OVERVIEW -->
+    <section class="dashboard-section">
+        <div class="section-heading">
             <div>
-                <h3>Dogs</h3>
-                <p><?php echo $totalpets; ?></p>
+                <span class="section-eyebrow">OVERVIEW</span>
+                <h3>My Pets</h3>
+            </div>
+            <a href="my_pet.php" class="section-link">View all pets →</a>
+        </div>
+
+        <div class="professional-stat-grid">
+
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon dog-icon">🐶</span>
+                    <span class="stat-caption">DOGS</span>
+                </div>
+                <strong><?= $totalpets ?></strong>
+                <p>Registered dogs</p>
+            </div>
+
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon cat-icon">🐱</span>
+                    <span class="stat-caption">CATS</span>
+                </div>
+                <strong><?= $totalpets2 ?></strong>
+                <p>Registered cats</p>
+            </div>
+
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon other-icon">🐾</span>
+                    <span class="stat-caption">OTHERS</span>
+                </div>
+                <strong><?= $totalpets3 ?></strong>
+                <p>Other pet types</p>
+            </div>
+
+            <div class="professional-stat-card highlight-stat">
+                <div class="stat-top">
+                    <span class="stat-icon total-icon">❤️</span>
+                    <span class="stat-caption">TOTAL PETS</span>
+                </div>
+                <strong><?= $totalAllPets ?></strong>
+                <p>All registered pets</p>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- HEALTH RECORD OVERVIEW -->
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">HEALTH MONITORING</span>
+                <h3>Pet Care Records</h3>
             </div>
         </div>
 
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">🐱</div>
-            <div>
-                <h3>Cats</h3>
-                <p><?php echo $totalpets2; ?></p>
+        <div class="professional-stat-grid">
+
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon vaccine-icon">💉</span>
+                    <span class="stat-caption">VACCINES</span>
+                </div>
+                <strong><?= $vac ?></strong>
+                <p>Total vaccine records</p>
             </div>
-        </div>
 
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">🐾</div>
-            <div>
-                <h3>Others</h3>
-                <p><?php echo $totalpets3; ?></p>
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon appointment-icon">📅</span>
+                    <span class="stat-caption">APPOINTMENTS</span>
+                </div>
+                <strong><?= $totalAppointments ?></strong>
+                <p>Total appointment records</p>
             </div>
-        </div>
 
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">❤️</div>
-            <div>
-                <h3>Total Pets</h3>
-                <p><?php echo $totalAllPets; ?></p>
+            <div class="professional-stat-card warning-stat">
+                <div class="stat-top">
+                    <span class="stat-icon overdue-icon">⚠️</span>
+                    <span class="stat-caption">OVERDUE</span>
+                </div>
+                <strong><?= $overdueVaccines ?></strong>
+                <p>Overdue vaccinations</p>
             </div>
-        </div>
 
-    </div>
-
-    <!-- RECORD SUMMARY -->
-    <h3 class="dashboard-heading">📋 Pet Care Records</h3>
-
-    <div class="user-dashboard-cards">
-
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">💉</div>
-            <div>
-                <h3>Total Vaccines</h3>
-                <p><?php echo $vac; ?></p>
+            <div class="professional-stat-card">
+                <div class="stat-top">
+                    <span class="stat-icon upcoming-icon">🔔</span>
+                    <span class="stat-caption">UPCOMING</span>
+                </div>
+                <strong><?= $upcomingVaccines ?></strong>
+                <p>Vaccines due within 30 days</p>
             </div>
-        </div>
 
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">📅</div>
-            <div>
-                <h3>Total Appointments</h3>
-                <p><?php echo $totalAppointments; ?></p>
-            </div>
         </div>
-
-        <div class="user-dashboard-card warning-card">
-            <div class="dashboard-icon">⚠️</div>
-            <div>
-                <h3>Overdue Vaccines</h3>
-                <p><?php echo $overdueVaccines; ?></p>
-            </div>
-        </div>
-
-        <div class="user-dashboard-card">
-            <div class="dashboard-icon">🔔</div>
-            <div>
-                <h3>Upcoming Vaccines</h3>
-                <p><?php echo $upcomingVaccines; ?></p>
-            </div>
-        </div>
-
-    </div>
+    </section>
 
     <!-- QUICK ACTIONS -->
-    <h3 class="dashboard-heading">Quick Actions</h3>
-
-    <div class="user-quick-actions">
-
-        <a href="add_pet.php">➕ Add Pet</a>
-
-        <a href="my_pet.php">🐾 View My Pets</a>
-
-    </div>
-
-    <!-- UPCOMING APPOINTMENTS -->
-    <div class="user-dashboard-section">
-
-        <h3>📅 Upcoming Appointments</h3>
-
-        <div class="table-wrap">
-
-            <table>
-                <tr>
-                    <th>Pet</th>
-                    <th>Date</th>
-                    <th>Time</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                </tr>
-
-                <?php if ($appointments->num_rows > 0) { ?>
-
-                    <?php while ($row = $appointments->fetch_assoc()) { ?>
-
-                        <tr>
-                            <td><?php echo h($row['pet_name']); ?></td>
-                            <td><?php echo h($row['date']); ?></td>
-                            <td><?php echo h($row['time']); ?></td>
-                            <td><?php echo h($row['reason']); ?></td>
-
-                            <td>
-                                <?php if ($row['date'] == date('Y-m-d')) { ?>
-                                    <span class="appointment-today">Today</span>
-                                <?php } else { ?>
-                                    <span class="appointment-upcoming">Upcoming</span>
-                                <?php } ?>
-                            </td>
-                        </tr>
-
-                    <?php } ?>
-
-                <?php } else { ?>
-
-                    <tr>
-                        <td colspan="5" class="empty-message">
-                            No upcoming appointments.
-                        </td>
-                    </tr>
-
-                <?php } ?>
-
-            </table>
-
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">SHORTCUTS</span>
+                <h3>Quick Actions</h3>
+            </div>
         </div>
 
-    </div>
+        <div class="professional-quick-actions">
+            <a href="add_pet.php">
+                <span>＋</span>
+                <div>
+                    <strong>Add New Pet</strong>
+                    <small>Register a pet</small>
+                </div>
+                <b>→</b>
+            </a>
+
+            <a href="my_pet.php">
+                <span>🐾</span>
+                <div>
+                    <strong>Manage My Pets</strong>
+                    <small>View pet information</small>
+                </div>
+                <b>→</b>
+            </a>
+        </div>
+    </section>
+
+    <!-- APPOINTMENTS -->
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">SCHEDULE</span>
+                <h3>Upcoming Appointments</h3>
+            </div>
+            <span class="section-count"><?= $upcomingAppointments ?> upcoming</span>
+        </div>
+
+        <div class="professional-table-wrap">
+            <table class="professional-table">
+                <thead>
+                    <tr>
+                        <th>Pet</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                <?php if ($appointments->num_rows > 0): ?>
+                    <?php while ($row = $appointments->fetch_assoc()): ?>
+                        <tr>
+                            <td><strong><?= h($row['pet_name']) ?></strong></td>
+                            <td><?= h(date('M d, Y', strtotime($row['date']))) ?></td>
+                            <td><?= h(date('h:i A', strtotime($row['time']))) ?></td>
+                            <td><?= h($row['reason']) ?></td>
+                            <td>
+                                <?php
+                                $appointmentStatus = $row['status'] ?? 'Pending';
+                                $appointmentClass = strtolower($appointmentStatus);
+                                ?>
+                                <span class="status-badge status-<?= h($appointmentClass) ?>">
+                                    <?= h($appointmentStatus) ?>
+                                </span>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="professional-empty">
+                            <span>📅</span>
+                            <strong>No upcoming appointments</strong>
+                            <small>Your upcoming appointments will appear here.</small>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <!-- VACCINATION REMINDERS -->
-    <div class="user-dashboard-section">
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">HEALTH REMINDERS</span>
+                <h3>Vaccination Reminders</h3>
+            </div>
+            <span class="section-count">Next 30 days + overdue</span>
+        </div>
 
-        <h3>💉 Vaccination Reminders</h3>
+        <div class="professional-table-wrap">
+            <table class="professional-table">
+                <thead>
+                    <tr>
+                        <th>Pet</th>
+                        <th>Vaccine</th>
+                        <th>Next Schedule</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
 
-        <div class="table-wrap">
+                <tbody>
+                <?php if ($vaccinationReminders->num_rows > 0): ?>
+                    <?php while ($row = $vaccinationReminders->fetch_assoc()): ?>
+                        <?php
+                        $schedule = $row['next_schedule'];
 
-            <table>
-                <tr>
-                    <th>Pet</th>
-                    <th>Vaccine</th>
-                    <th>Next Schedule</th>
-                    <th>Status</th>
-                </tr>
-
-                <?php if ($vaccinationReminders->num_rows > 0) { ?>
-
-                    <?php while ($row = $vaccinationReminders->fetch_assoc()) { ?>
-
+                        if ($schedule < $today) {
+                            $vaccineStatus = 'Overdue';
+                            $vaccineClass = 'overdue';
+                        } elseif ($schedule === $today) {
+                            $vaccineStatus = 'Due Today';
+                            $vaccineClass = 'today';
+                        } else {
+                            $vaccineStatus = 'Upcoming';
+                            $vaccineClass = 'upcoming';
+                        }
+                        ?>
                         <tr>
-                            <td><?php echo h($row['pet_name']); ?></td>
-                            <td><?php echo h($row['vaccine_name']); ?></td>
-                            <td><?php echo h($row['next_schedule']); ?></td>
-
+                            <td><strong><?= h($row['pet_name']) ?></strong></td>
+                            <td><?= h($row['vaccine_name']) ?></td>
+                            <td><?= h(date('M d, Y', strtotime($schedule))) ?></td>
                             <td>
-                                <?php if ($row['next_schedule'] < date('Y-m-d')) { ?>
-                                    <span class="vaccine-overdue">Overdue</span>
-                                <?php } elseif ($row['next_schedule'] == date('Y-m-d')) { ?>
-                                    <span class="appointment-today">Due Today</span>
-                                <?php } else { ?>
-                                    <span class="appointment-upcoming">Upcoming</span>
-                                <?php } ?>
+                                <span class="status-badge status-<?= h($vaccineClass) ?>">
+                                    <?= h($vaccineStatus) ?>
+                                </span>
                             </td>
                         </tr>
-
-                    <?php } ?>
-
-                <?php } else { ?>
-
+                    <?php endwhile; ?>
+                <?php else: ?>
                     <tr>
-                        <td colspan="4" class="empty-message">
-                            No vaccination reminders within the next 30 days.
+                        <td colspan="4" class="professional-empty">
+                            <span>💉</span>
+                            <strong>No vaccination reminders</strong>
+                            <small>No overdue or upcoming schedules within the next 30 days.</small>
                         </td>
                     </tr>
-
-                <?php } ?>
-
+                <?php endif; ?>
+                </tbody>
             </table>
+        </div>
+    </section>
 
+    <!-- MEDICAL RECORDS -->
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">HEALTH HISTORY</span>
+                <h3>Recent Medical Records</h3>
+            </div>
         </div>
 
-    </div>
+        <div class="professional-table-wrap">
+            <table class="professional-table">
+                <thead>
+                    <tr>
+                        <th>Pet</th>
+                        <th>Date</th>
+                        <th>Diagnosis</th>
+                        <th>Treatment</th>
+                    </tr>
+                </thead>
 
-    <!-- RECENT MEDICAL RECORDS -->
-    <div class="user-dashboard-section">
-
-        <h3>🩺 Recent Medical Records</h3>
-
-        <div class="table-wrap">
-
-            <table>
-                <tr>
-                    <th>Pet</th>
-                    <th>Date</th>
-                    <th>Diagnosis</th>
-                    <th>Treatment</th>
-                </tr>
-
-                <?php if ($medicalRecords->num_rows > 0) { ?>
-
-                    <?php while ($row = $medicalRecords->fetch_assoc()) { ?>
-
+                <tbody>
+                <?php if ($medicalRecords->num_rows > 0): ?>
+                    <?php while ($row = $medicalRecords->fetch_assoc()): ?>
                         <tr>
-                            <td><?php echo h($row['pet_name']); ?></td>
-                            <td><?php echo h($row['date']); ?></td>
-                            <td><?php echo h($row['diagnosis']); ?></td>
-                            <td><?php echo h($row['treatment']); ?></td>
+                            <td><strong><?= h($row['pet_name']) ?></strong></td>
+                            <td><?= h(date('M d, Y', strtotime($row['date']))) ?></td>
+                            <td><?= h($row['diagnosis']) ?></td>
+                            <td><?= h($row['treatment']) ?></td>
                         </tr>
-
-                    <?php } ?>
-
-                <?php } else { ?>
-
+                    <?php endwhile; ?>
+                <?php else: ?>
                     <tr>
-                        <td colspan="4" class="empty-message">
-                            No medical records available.
+                        <td colspan="4" class="professional-empty">
+                            <span>🩺</span>
+                            <strong>No medical records yet</strong>
+                            <small>Medical records for your pets will appear here.</small>
                         </td>
                     </tr>
-
-                <?php } ?>
-
+                <?php endif; ?>
+                </tbody>
             </table>
+        </div>
+    </section>
 
+    <!-- PET CARE STATUS -->
+    <section class="dashboard-section">
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">IMPORTANT INFORMATION</span>
+                <h3>Pet Care Status</h3>
+            </div>
         </div>
 
-    </div>
+        <?php if ($overdueVaccines > 0): ?>
+            <div class="dashboard-notice notice-warning">
+                <span>⚠️</span>
+                <div>
+                    <strong>Vaccination attention required</strong>
+                    <p>
+                        You have <?= $overdueVaccines ?> overdue vaccination
+                        schedule(s). Please contact your veterinary clinic.
+                    </p>
+                </div>
+            </div>
 
-    <!-- STATUS / ALERTS -->
-    <div class="user-dashboard-section dashboard-status">
+        <?php elseif ($upcomingVaccines > 0): ?>
+            <div class="dashboard-notice notice-success">
+                <span>✓</span>
+                <div>
+                    <strong>Upcoming vaccination schedules</strong>
+                    <p>
+                        You have upcoming vaccination schedules.
+                        Please review your reminders above.
+                    </p>
+                </div>
+            </div>
 
-        <h3>🔔 Pet Care Status</h3>
+        <?php else: ?>
+            <div class="dashboard-notice notice-success">
+                <span>✓</span>
+                <div>
+                    <strong>No vaccination alerts</strong>
+                    <p>
+                        There are no overdue or upcoming vaccination
+                        reminders within the next 30 days.
+                    </p>
+                </div>
+            </div>
+        <?php endif; ?>
+    </section>
 
-        <?php if ($overdueVaccines > 0) { ?>
+    <footer class="dashboard-footer">
+        Pet-Care Veterinary Clinic Record System
+        <span>© <?= date('Y') ?></span>
+    </footer>
 
-            <p class="alert-warning">
-                ⚠️ You have <?php echo $overdueVaccines; ?>
-                overdue vaccination schedule(s). Please contact your veterinary clinic.
-            </p>
-
-        <?php } elseif ($upcomingVaccines > 0) { ?>
-
-            <p class="alert-success">
-                ✅ You have upcoming vaccination schedule(s). Check your reminders above.
-            </p>
-
-        <?php } else { ?>
-
-            <p class="alert-success">
-                ✅ No overdue or upcoming vaccination reminders at this time.
-            </p>
-
-        <?php } ?>
-
-    </div>
-
-</div>
+</main>
 
 </body>
 </html>

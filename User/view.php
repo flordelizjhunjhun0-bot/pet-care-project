@@ -12,7 +12,7 @@ if (!$pet_id) {
     exit("Invalid pet ID.");
 }
 
-/* Get pet information owned by logged-in user */
+/* GET PET INFORMATION */
 $stmt = $conn->prepare(
     "SELECT *
      FROM pets
@@ -25,13 +25,14 @@ $stmt->bind_param("ii", $pet_id, $user_id);
 $stmt->execute();
 
 $pet = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
 if (!$pet) {
     http_response_code(404);
     exit("Pet not found or access denied.");
 }
 
-/* Get vaccine records */
+/* GET VACCINE RECORDS */
 $stmt = $conn->prepare(
     "SELECT *
      FROM vaccines
@@ -43,8 +44,9 @@ $stmt->bind_param("i", $pet_id);
 $stmt->execute();
 
 $vaccine_query = $stmt->get_result();
+$stmt->close();
 
-/* Get medical history */
+/* GET MEDICAL HISTORY */
 $stmt = $conn->prepare(
     "SELECT *
      FROM medical_history
@@ -56,8 +58,9 @@ $stmt->bind_param("i", $pet_id);
 $stmt->execute();
 
 $medical_query = $stmt->get_result();
+$stmt->close();
 
-/* Get appointments */
+/* GET APPOINTMENTS */
 $stmt = $conn->prepare(
     "SELECT *
      FROM appointments
@@ -69,8 +72,14 @@ $stmt->bind_param("i", $pet_id);
 $stmt->execute();
 
 $appointment_query = $stmt->get_result();
+$stmt->close();
 
+$username = $_SESSION['username'] ?? 'Pet Owner';
 $today = date('Y-m-d');
+
+$vaccine_count = $vaccine_query->num_rows;
+$medical_count = $medical_query->num_rows;
+$appointment_count = $appointment_query->num_rows;
 
 ?>
 
@@ -80,319 +89,711 @@ $today = date('Y-m-d');
 <head>
 
     <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Pet Details | Pet-Care</title>
 
-    <!-- EXISTING CSS -->
-    <link rel="stylesheet" href="./users.css?v=3">
+    <link rel="stylesheet" href="users.css?v=5">
+
+    <style>
+
+        .pet-profile-card {
+            background: #ffffff;
+            border: 1px solid #e5eaf0;
+            border-radius: 15px;
+            padding: 25px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 14px rgba(20,40,55,.04);
+            margin-bottom: 25px;
+        }
+
+        .pet-profile-icon {
+            width: 75px;
+            height: 75px;
+            background: #e9f3f0;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+            flex-shrink: 0;
+        }
+
+        .pet-profile-info h3 {
+            color: #173b4d;
+            font-size: 23px;
+            margin-bottom: 7px;
+        }
+
+        .pet-profile-info p {
+            color: #6b7785;
+            font-size: 14px;
+        }
+
+        .pet-record-counts {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 15px;
+            margin-bottom: 28px;
+        }
+
+        .pet-count-card {
+            background: #ffffff;
+            border: 1px solid #e5eaf0;
+            border-radius: 13px;
+            padding: 18px;
+            box-shadow: 0 4px 14px rgba(20,40,55,.04);
+        }
+
+        .pet-count-card span {
+            display: block;
+            color: #6b7785;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .pet-count-card strong {
+            color: #173b4d;
+            font-size: 27px;
+        }
+
+        .pet-record-section {
+            margin-bottom: 30px;
+        }
+
+        .pet-record-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .pet-record-heading h3 {
+            color: #173b4d;
+            font-size: 19px;
+        }
+
+        .pet-add-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 15px;
+            border-radius: 8px;
+            background: #285d6b;
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .pet-add-button:hover {
+            background: #173b4d;
+        }
+
+        .pet-table-card {
+            background: #ffffff;
+            border: 1px solid #e5eaf0;
+            border-radius: 13px;
+            padding: 18px;
+            overflow-x: auto;
+            box-shadow: 0 4px 14px rgba(20,40,55,.04);
+        }
+
+        .pet-record-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 650px;
+        }
+
+        .pet-record-table th {
+            background: #f4f7f8;
+            color: #526271;
+            padding: 14px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+        }
+
+        .pet-record-table td {
+            padding: 14px;
+            border-bottom: 1px solid #edf0f2;
+            color: #354454;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .pet-record-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .record-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .record-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 11px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .record-edit {
+            background: #fff3dc;
+            color: #98651a;
+        }
+
+        .record-delete {
+            background: #fdeaea;
+            color: #c03939;
+        }
+
+        .record-status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .status-overdue,
+        .status-past,
+        .status-cancelled {
+            background: #fdeaea;
+            color: #c03939;
+        }
+
+        .status-upcoming,
+        .status-approved {
+            background: #e5f3eb;
+            color: #287548;
+        }
+
+        .status-today,
+        .status-pending {
+            background: #fff3dc;
+            color: #98651a;
+        }
+
+        .status-completed {
+            background: #e8f1f5;
+            color: #285d6b;
+        }
+
+        .record-empty {
+            text-align: center;
+            padding: 30px 15px !important;
+            color: #8a96a3 !important;
+        }
+
+        .pet-back-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 18px;
+            border-radius: 8px;
+            background: #e9eef2;
+            color: #203747;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .pet-back-button:hover {
+            background: #dce5eb;
+        }
+
+        @media(max-width: 768px) {
+
+            .pet-record-counts {
+                grid-template-columns: 1fr;
+            }
+
+            .pet-profile-card {
+                padding: 18px;
+            }
+
+            .pet-profile-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+            }
+
+            .pet-table-card {
+                padding: 10px;
+            }
+
+        }
+
+    </style>
 
 </head>
 
-<body>
+<body class="professional-dashboard">
 
 <!-- SIDEBAR -->
-<div class="sidebar">
+<aside class="sidebar">
 
-    <h1>🐾 Pet-Care</h1>
+    <div class="sidebar-brand">
 
-    <a href="user_dashboard.php">Dashboard</a>
-    <a href="add_pet.php">Add Pet</a>
-    <a href="my_pet.php">My Pets</a>
-    <a href="../Account/logout.php">Logout</a>
+        <div class="brand-icon">🐾</div>
 
-</div>
+        <div>
+            <h1>Pet-Care</h1>
+            <span>Veterinary Portal</span>
+        </div>
+
+    </div>
+
+    <p class="sidebar-label">MAIN MENU</p>
+
+    <nav class="sidebar-nav">
+
+        <a href="user_dashboard.php">
+            <span class="nav-icon">▦</span>
+            Dashboard
+        </a>
+
+        <a href="add_pet.php">
+            <span class="nav-icon">＋</span>
+            Add Pet
+        </a>
+
+        <a href="my_pet.php" class="active">
+            <span class="nav-icon">🐾</span>
+            My Pets
+        </a>
+
+    </nav>
+
+    <div class="sidebar-bottom">
+
+        <div class="sidebar-user">
+
+            <div class="user-avatar">👤</div>
+
+            <div>
+                <strong><?= h($username) ?></strong>
+                <span>Pet Owner</span>
+            </div>
+
+        </div>
+
+        <a href="../Account/logout.php" class="logout-link">
+            <span class="nav-icon">↪</span>
+            Logout
+        </a>
+
+    </div>
+
+</aside>
 
 <!-- MAIN CONTENT -->
-<div class="main">
+<main class="main professional-main">
 
-    <div class="page-title">
+    <header class="dashboard-topbar">
 
-        <h2>🐾 Pet Details</h2>
+        <div>
+            <span class="topbar-label">PET MANAGEMENT</span>
+            <h2>Pet Details</h2>
+        </div>
 
-        <p>Manage your pet's information and health records.</p>
+        <div class="topbar-date">
+            <span>Today</span>
+            <strong><?= date('F d, Y') ?></strong>
+        </div>
 
-    </div>
+    </header>
 
-    <!-- PET INFORMATION -->
-    <div class="box1">
+    <!-- PET PROFILE -->
+    <section class="dashboard-section">
 
-        <h2><?= h($pet['pet_name']) ?></h2>
+        <div class="section-heading">
+            <div>
+                <span class="section-eyebrow">PET INFORMATION</span>
+                <h3>Pet Profile</h3>
+            </div>
+        </div>
 
-        <p>
-            <strong>Pet Type:</strong>
-            <?= h($pet['type']) ?>
-        </p>
+        <div class="pet-profile-card">
 
-    </div>
+            <div class="pet-profile-icon">🐾</div>
 
-    <br>
+            <div class="pet-profile-info">
 
-    <!-- ADD ACTION BUTTONS -->
-    <div class="action-buttons">
+                <h3><?= h($pet['pet_name']) ?></h3>
 
-        <a class="button"
-           href="add_vaccine.php?pet_id=<?= (int)$pet_id ?>">
-            💉 Add Vaccine
-        </a>
+                <p>
+                    Pet Type:
+                    <strong><?= h($pet['type']) ?></strong>
+                </p>
 
-        <a class="button"
-           href="add_medical.php?pet_id=<?= (int)$pet_id ?>">
-            🩺 Add Medical Record
-        </a>
+            </div>
 
-        <a class="button"
-           href="add_appointment.php?pet_id=<?= (int)$pet_id ?>">
-            📅 Add Appointment
-        </a>
-        
+        </div>
 
-    </div>
+        <!-- RECORD COUNTS -->
+        <div class="pet-record-counts">
 
-    <hr>
+            <div class="pet-count-card">
+                <span>Vaccination Records</span>
+                <strong><?= $vaccine_count ?></strong>
+            </div>
 
-    <!-- VACCINE HISTORY -->
-    <h3>💉 Vaccine History</h3>
+            <div class="pet-count-card">
+                <span>Medical Records</span>
+                <strong><?= $medical_count ?></strong>
+            </div>
 
-    <div class="table-wrap">
+            <div class="pet-count-card">
+                <span>Appointments</span>
+                <strong><?= $appointment_count ?></strong>
+            </div>
 
-    <table>
+        </div>
 
-        <tr>
-            <th>Vaccine</th>
-            <th>Date Given</th>
-            <th>Next Schedule</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
+    </section>
 
-        <?php if ($vaccine_query->num_rows === 0): ?>
+    <!-- VACCINATION RECORDS -->
+    <section class="pet-record-section">
 
-            <tr>
-                <td colspan="5">No vaccine records found.</td>
-            </tr>
+        <div class="pet-record-heading">
 
-        <?php endif; ?>
+            <div>
+                <span class="section-eyebrow">HEALTH RECORDS</span>
+                <h3>💉 Vaccination Records</h3>
+            </div>
 
-        <?php while ($row = $vaccine_query->fetch_assoc()): ?>
+            <a href="add_vaccine.php?pet_id=<?= (int)$pet_id ?>"
+               class="pet-add-button">
+                ＋ Add Vaccine
+            </a>
 
-            <tr>
+        </div>
 
-                <td><?= h($row['vaccine_name']) ?></td>
+        <div class="pet-table-card">
 
-                <td><?= h($row['date_given']) ?></td>
+            <table class="pet-record-table">
 
-                <td>
-                    <?= h($row['next_schedule'] ?: 'Not scheduled') ?>
-                </td>
+                <thead>
+                    <tr>
+                        <th>Vaccine</th>
+                        <th>Date Given</th>
+                        <th>Next Schedule</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
 
-                <td>
+                <tbody>
 
-                    <?php
+                <?php if ($vaccine_count === 0): ?>
 
-                    if (empty($row['next_schedule'])) {
+                    <tr>
+                        <td colspan="5" class="record-empty">
+                            No vaccination records found.
+                        </td>
+                    </tr>
 
-                        echo "Not scheduled";
+                <?php else: ?>
 
-                    } elseif ($row['next_schedule'] < $today) {
+                    <?php while ($row = $vaccine_query->fetch_assoc()): ?>
 
-                        echo "<span style='color:red'>OVERDUE</span>";
+                        <?php
+                        $next_schedule = $row['next_schedule'] ?? '';
 
-                    } else {
+                        if ($next_schedule === '') {
+                            $vaccine_status = 'Not Scheduled';
+                            $vaccine_class = 'status-today';
+                        } elseif ($next_schedule < $today) {
+                            $vaccine_status = 'Overdue';
+                            $vaccine_class = 'status-overdue';
+                        } elseif ($next_schedule === $today) {
+                            $vaccine_status = 'Due Today';
+                            $vaccine_class = 'status-today';
+                        } else {
+                            $vaccine_status = 'Upcoming';
+                            $vaccine_class = 'status-upcoming';
+                        }
+                        ?>
 
-                        echo "<span style='color:green'>UPCOMING</span>";
+                        <tr>
 
-                    }
+                            <td><?= h($row['vaccine_name']) ?></td>
 
-                    ?>
+                            <td><?= h($row['date_given']) ?></td>
 
-                </td>
+                            <td>
+                                <?= h($next_schedule ?: 'Not scheduled') ?>
+                            </td>
 
-                <td>
-                     <div class="action-buttons">
-                    
+                            <td>
+                                <span class="record-status <?= $vaccine_class ?>">
+                                    <?= h($vaccine_status) ?>
+                                </span>
+                            </td>
 
-                    <a class ="button" href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
-                        Edit
-                    </a>
+                            <td>
+                                <div class="record-actions">
 
-                    <a class = "button" href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
-                       onclick="return confirm('Delete this vaccine record?')">
-                        Delete
-                    </a>
-                    </div>
+                                    <a class="record-action record-edit"
+                                       href="edit_vaccine.php?id=<?= (int)$row['id'] ?>">
+                                        Edit
+                                    </a>
 
-                </td>
+                                    <a class="record-action record-delete"
+                                       href="delete_vaccine.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                                       onclick="return confirm('Delete this vaccine record?')">
+                                        Delete
+                                    </a>
 
-            </tr>
+                                </div>
+                            </td>
 
-        <?php endwhile; ?>
+                        </tr>
 
-    </table>
+                    <?php endwhile; ?>
 
-    </div>
+                <?php endif; ?>
 
-    <hr>
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
 
     <!-- MEDICAL HISTORY -->
-    <h3>🩺 Medical History</h3>
+    <section class="pet-record-section">
 
-    <div class="table-wrap">
+        <div class="pet-record-heading">
 
-    <table>
+            <div>
+                <span class="section-eyebrow">HEALTH RECORDS</span>
+                <h3>🩺 Medical History</h3>
+            </div>
 
-        <tr>
-            <th>Date</th>
-            <th>Diagnosis</th>
-            <th>Treatment</th>
-            <th>Notes</th>
-            <th>Action</th>
-        </tr>
+            <a href="add_medical.php?pet_id=<?= (int)$pet_id ?>"
+               class="pet-add-button">
+                ＋ Add Medical Record
+            </a>
 
-        <?php if ($medical_query->num_rows === 0): ?>
+        </div>
 
-            <tr>
-                <td colspan="5">No medical records found.</td>
-            </tr>
+        <div class="pet-table-card">
 
-        <?php endif; ?>
+            <table class="pet-record-table">
 
-        <?php while ($row = $medical_query->fetch_assoc()): ?>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Diagnosis</th>
+                        <th>Treatment</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
 
-            <tr>
+                <tbody>
 
-                <td><?= h($row['date']) ?></td>
+                <?php if ($medical_count === 0): ?>
 
-                <td><?= h($row['diagnosis']) ?></td>
+                    <tr>
+                        <td colspan="5" class="record-empty">
+                            No medical records found.
+                        </td>
+                    </tr>
 
-                <td><?= h($row['treatment']) ?></td>
+                <?php else: ?>
 
-                <td><?= h($row['notes']) ?></td>
+                    <?php while ($row = $medical_query->fetch_assoc()): ?>
 
-                <td>
+                        <tr>
 
-                    <div class="action-buttons">
-                    
+                            <td><?= h($row['date']) ?></td>
 
-                    <a class="button" href="edit_medical.php?id=<?= (int)$row['id'] ?>">
-    Edit
-</a>
+                            <td><?= h($row['diagnosis']) ?></td>
 
-<a class="button"
-   href="delete_medical.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
-   onclick="return confirm('Delete this medical record?')">
-    Delete
-</a>
-                    </div>
-                </td>
+                            <td><?= h($row['treatment']) ?></td>
 
-            </tr>
+                            <td><?= h($row['notes']) ?></td>
 
-        <?php endwhile; ?>
+                            <td>
 
-    </table>
+                                <div class="record-actions">
 
-    </div>
+                                    <a class="record-action record-edit"
+                                       href="edit_medical.php?id=<?= (int)$row['id'] ?>">
+                                        Edit
+                                    </a>
 
-    <hr>
+                                    <a class="record-action record-delete"
+                                       href="delete_medical.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                                       onclick="return confirm('Delete this medical record?')">
+                                        Delete
+                                    </a>
+
+                                </div>
+
+                            </td>
+
+                        </tr>
+
+                    <?php endwhile; ?>
+
+                <?php endif; ?>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
 
     <!-- APPOINTMENTS -->
-    <h3>📅 Appointments</h3>
+    <section class="pet-record-section">
 
-    <div class="table-wrap">
+        <div class="pet-record-heading">
 
-    <table>
+            <div>
+                <span class="section-eyebrow">SCHEDULE MANAGEMENT</span>
+                <h3>📅 Appointments</h3>
+            </div>
 
-        <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Reason</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
+            <a href="add_appointment.php?pet_id=<?= (int)$pet_id ?>"
+               class="pet-add-button">
+                ＋ Add Appointment
+            </a>
 
-        <?php if ($appointment_query->num_rows === 0): ?>
+        </div>
 
-            <tr>
-                <td colspan="5">No appointments found.</td>
-            </tr>
+        <div class="pet-table-card">
 
-        <?php endif; ?>
+            <table class="pet-record-table">
 
-        <?php while ($row = $appointment_query->fetch_assoc()): ?>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
 
-            <tr>
+                <tbody>
 
-                <td><?= h($row['date']) ?></td>
+                <?php if ($appointment_count === 0): ?>
 
-                <td><?= h($row['time']) ?></td>
+                    <tr>
+                        <td colspan="5" class="record-empty">
+                            No appointments found.
+                        </td>
+                    </tr>
 
-                <td><?= h($row['reason']) ?></td>
+                <?php else: ?>
 
-                <td>
+                    <?php while ($row = $appointment_query->fetch_assoc()): ?>
 
-                    <?php
+                        <?php
+                        $appointment_status = $row['status'] ?? '';
 
-                    if ($row['date'] < $today) {
+                        if ($appointment_status === '') {
+                            if ($row['date'] < $today) {
+                                $appointment_status = 'Past';
+                            } elseif ($row['date'] === $today) {
+                                $appointment_status = 'Today';
+                            } else {
+                                $appointment_status = 'Upcoming';
+                            }
+                        }
 
-                        echo "<span style='color:red'>PAST</span>";
+                        $status_class = 'status-upcoming';
 
-                    } else {
+                        if ($appointment_status === 'Pending') {
+                            $status_class = 'status-pending';
+                        } elseif ($appointment_status === 'Approved') {
+                            $status_class = 'status-approved';
+                        } elseif ($appointment_status === 'Completed') {
+                            $status_class = 'status-completed';
+                        } elseif ($appointment_status === 'Cancelled' ||
+                                  $appointment_status === 'Past') {
+                            $status_class = 'status-cancelled';
+                        } elseif ($appointment_status === 'Today') {
+                            $status_class = 'status-today';
+                        }
+                        ?>
 
-                        echo "<span style='color:green'>UPCOMING</span>";
+                        <tr>
 
-                    }
+                            <td><?= h($row['date']) ?></td>
 
-                    ?>
+                            <td><?= h($row['time']) ?></td>
 
-                </td>
+                            <td><?= h($row['reason']) ?></td>
 
-                <td>
+                            <td>
+                                <span class="record-status <?= $status_class ?>">
+                                    <?= h($appointment_status) ?>
+                                </span>
+                            </td>
 
-                    <div class="action-buttons">
-                    
+                            <td>
 
-                   <div class="action-buttons">
+                                <div class="record-actions">
 
-    <a class="button"
-       href="edit_appointment.php?id=<?= (int)$row['id'] ?>">
-        Edit
-    </a>
+                                    <a class="record-action record-edit"
+                                       href="edit_appointment.php?id=<?= (int)$row['id'] ?>">
+                                        Edit
+                                    </a>
 
-    <a class="button"
-       href="delete_appointment.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
-       onclick="return confirm('Delete this appointment?')">
-        Delete
-    </a>
+                                    <a class="record-action record-delete"
+                                       href="delete_appointment.php?id=<?= (int)$row['id'] ?>&pet_id=<?= (int)$pet_id ?>"
+                                       onclick="return confirm('Delete this appointment?')">
+                                        Delete
+                                    </a>
 
-</div>
-                    </div>
+                                </div>
 
-                </td>
+                            </td>
 
-            </tr>
+                        </tr>
 
-        <?php endwhile; ?>
+                    <?php endwhile; ?>
 
-    </table>
+                <?php endif; ?>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+    <!-- BACK BUTTON -->
+    <div style="margin-top: 25px; margin-bottom: 30px;">
+
+        <a href="my_pet.php" class="pet-back-button">
+            ← Back to My Pets
+        </a>
 
     </div>
 
-    <br>
-  
- <div class="action-buttons">
-     <a class="button"
-    href="my_pet.php">Back to My Pets</a>
-
-
- </div>
- 
-
-
-
-</div>
+</main>
 
 </body>
 </html>
